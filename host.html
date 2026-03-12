@@ -46,14 +46,20 @@
         .action-btn { background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.5; transition: opacity 0.2s; }
         .action-btn:hover { opacity: 1; }
 
-        /* Knappar */
+        /* Knappar och Toast */
         button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: white; transition: background 0.2s; }
         .btn-primary { background-color: var(--primary); } .btn-primary:hover { background-color: var(--primary-hover); }
         .btn-success { background-color: var(--success); } .btn-success:hover { background-color: var(--success-hover); }
         .btn-warning { background-color: var(--warning); color: white; }
+        
+        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--text-main); color: white; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 1000; font-weight: bold; display: none; }
+        .toast.error { background: var(--danger); }
+        .toast.success { background: var(--success); }
     </style>
 </head>
 <body>
+
+    <div class="toast" id="toastMessage">Meddelande</div>
 
     <header>
         <div class="room-info">
@@ -100,8 +106,7 @@
             projectId: "lock-and-key-e96a1",
             storageBucket: "lock-and-key-e96a1.firebasestorage.app",
             messagingSenderId: "632843065326",
-            appId: "1:632843065326:web:6dbe765294c3aefe7460ff",
-            measurementId: "G-B6GN03FXJZ"
+            appId: "1:632843065326:web:6dbe765294c3aefe7460ff"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -115,8 +120,8 @@
 
         async function initHost() {
             if (!window.roomId || !window.localToken) {
-                alert("Du saknar behörighet. Skickar dig till elevinloggningen.");
-                window.location.href = `play.html?room=${window.roomId || ''}`;
+                showToast("Du saknar behörighet. Skickar dig till inloggningen.", "error");
+                setTimeout(() => window.location.href = `play.html?room=${window.roomId || ''}`, 2000);
                 return;
             }
 
@@ -126,9 +131,8 @@
             if (pendingDataStr) {
                 const pendingData = JSON.parse(pendingDataStr);
                 
-                // --- NY SÄKERHETSCHECK ---
                 if (!pendingData.package) {
-                    alert("Fel: Frågepaketet följde inte med! \n\nGå tillbaka till din startsida, gör en hård uppdatering (Ctrl+F5) och försök igen.");
+                    showToast("Fel: Frågepaketet saknas. Gå tillbaka och gör en hård uppdatering (Ctrl+F5).", "error");
                     localStorage.removeItem('lockAndKey_pendingRoom');
                     return;
                 }
@@ -143,8 +147,7 @@
                         });
                         localStorage.removeItem('lockAndKey_pendingRoom');
                     } catch (error) {
-                        console.error("Firebase fel:", error);
-                        alert("Kunde inte spara rummet: " + error.message);
+                        showToast("Kunde inte spara rummet: " + error.message, "error");
                     }
                 }
             }
@@ -166,28 +169,52 @@
     </script>
 
     <script>
-        // --- RENDERING ---
-        const TEAM_NAMES = ["Stormen", "Örnen", "Tornet", "Vargarna", "Björnarna", "Hajarna", "Lejonen", "Tigrarna", "Falkarna", "Kobrorna"];
+        // --- TOAST MEDDELANDEN ---
+        function showToast(msg, type = "normal") {
+            const toast = document.getElementById('toastMessage');
+            toast.innerText = msg;
+            toast.className = 'toast';
+            if(type === 'error') toast.classList.add('error');
+            if(type === 'success') toast.classList.add('success');
+            
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 3000);
+        }
 
-function renderTeamsGrid() {
-    const grid = document.getElementById('teamsGrid');
-    grid.innerHTML = '';
-    for (let i = 1; i <= window.numberOfTeams; i++) {
-        const teamName = TEAM_NAMES[(i - 1) % TEAM_NAMES.length];
-        grid.innerHTML += `
-            <div class="team-box" ondragover="allowDrop(event)" ondrop="drop(event, ${i})" ondragenter="this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')">
-                <div class="team-header">${teamName}</div>
-                <div class="team-players" id="team-${i}"></div>
-            </div>
-        `;
-    }
-}
+        // --- LAGNAMNSGENERATOR ---
+        const ADJECTIVES = ["De Snabba", "De Starka", "De Listiga", "De Modiga", "De Galna", "De Smarta", "De Vilda", "De Mystiska", "De Tysta", "De Lysande"];
+        const NOUNS = ["Stormarna", "Örnarna", "Tornen", "Vargarna", "Björnarna", "Hajarna", "Lejonen", "Tigrarna", "Falkarna", "Kobrorna"];
+
+        function getTeamName(index) {
+            // Arrays är 0-indexerade, så Lag 1 = index 0.
+            const adjIndex = Math.floor((index - 1) / NOUNS.length) % ADJECTIVES.length;
+            const nounIndex = (index - 1) % NOUNS.length;
+            
+            // Om vi har fler lag än substantiv börjar vi lägga till adjektiv, t.ex. "De Snabba Vargarna"
+            if (index <= NOUNS.length) {
+                return NOUNS[nounIndex];
+            } else {
+                return `${ADJECTIVES[adjIndex]} ${NOUNS[nounIndex]}`;
+            }
+        }
+
+        function renderTeamsGrid() {
+            const grid = document.getElementById('teamsGrid');
+            grid.innerHTML = '';
+            for (let i = 1; i <= window.numberOfTeams; i++) {
+                grid.innerHTML += `
+                    <div class="team-box" ondragover="allowDrop(event)" ondrop="drop(event, ${i})" ondragenter="this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')">
+                        <div class="team-header">${getTeamName(i)}</div>
+                        <div class="team-players" id="team-${i}"></div>
+                    </div>
+                `;
+            }
+        }
 
         function renderAllPlayers() {
             const unassignedList = document.getElementById('unassignedList');
             unassignedList.innerHTML = '';
             
-            // Rensa lagboxarna
             for (let i = 1; i <= window.numberOfTeams; i++) {
                 const teamEl = document.getElementById(`team-${i}`);
                 if(teamEl) teamEl.innerHTML = '';
@@ -211,11 +238,10 @@ function renderTeamsGrid() {
                 if (p.team === null || p.team === undefined) {
                     unassignedList.appendChild(chip);
                 } else {
-                    // Om laget inte finns i UI än, skapa det
                     if (p.team > window.numberOfTeams) {
                         window.numberOfTeams = p.team;
                         renderTeamsGrid();
-                        renderAllPlayers(); // Starta om renderingen så allt hamnar rätt
+                        renderAllPlayers();
                         return;
                     }
                     document.getElementById(`team-${p.team}`).appendChild(chip);
@@ -229,12 +255,11 @@ function renderTeamsGrid() {
             renderAllPlayers();
         }
 
-        // --- DRAG AND DROP LOKIG ---
+        // --- DRAG AND DROP ---
         function allowDrop(ev) { ev.preventDefault(); }
         
         async function drop(ev, teamId) {
             ev.preventDefault();
-            // Ta bort grön markering
             document.querySelectorAll('.team-box').forEach(el => el.classList.remove('drag-over'));
             
             const playerId = ev.dataTransfer.getData("playerId");
@@ -246,10 +271,13 @@ function renderTeamsGrid() {
 
         // --- ELEV-HANTERING ---
         async function renamePlayer(id, oldName) {
+            // Använder native prompt här eftersom det blockerar och är enklast för text-input. 
+            // Alert/Confirm byts dock mot Toast.
             const newName = prompt("Nytt namn för eleven:", oldName);
             if (newName && newName.trim() !== oldName) {
                 import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, updateDoc }) => {
                     await updateDoc(doc(window.db, "rooms", window.roomId, "players", id), { name: newName.trim() });
+                    showToast(`Namnet ändrades till ${newName.trim()}`, "success");
                 });
             }
         }
@@ -258,17 +286,17 @@ function renderTeamsGrid() {
             if (confirm("Är du säker på att du vill kicka eleven? De måste skriva in sitt namn igen.")) {
                 import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, deleteDoc }) => {
                     await deleteDoc(doc(window.db, "rooms", window.roomId, "players", id));
+                    showToast("Eleven kickades.", "success");
                 });
             }
         }
 
         async function randomizeTeams(teamSize) {
             if (window.players.length === 0) {
-                alert("Det finns inga elever att slumpa än!");
+                showToast("Det finns inga elever att slumpa än!", "error");
                 return;
             }
 
-            // Skapa en blandad kopia av spelar-arrayen (Fisher-Yates)
             let shuffled = [...window.players];
             for (let i = shuffled.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
@@ -279,13 +307,13 @@ function renderTeamsGrid() {
                 const batch = writeBatch(window.db);
                 
                 shuffled.forEach((player, index) => {
-                    // Dividera med teamSize och avrunda nedåt för att få lag 1, 2, 3 etc.
                     const teamNum = Math.floor(index / teamSize) + 1;
                     const pRef = doc(window.db, "rooms", window.roomId, "players", player.id);
                     batch.update(pRef, { team: teamNum });
                 });
 
                 await batch.commit();
+                showToast("Lagen har slumpats!", "success");
             });
         }
 
@@ -304,15 +332,14 @@ function renderTeamsGrid() {
         }
 
         function copyJoinLink() {
-            // Länken byggs utifrån vart du är hostad just nu
             const origin = window.location.origin + window.location.pathname.replace('host.html', 'play.html');
             const link = `${origin}?room=${window.roomId}`;
-            navigator.clipboard.writeText(link).then(() => alert("Länk kopierad till urklipp!\n\n" + link));
+            navigator.clipboard.writeText(link).then(() => showToast("Länk kopierad till urklipp!", "success"));
         }
 
         function startGame() {
-            alert("Nu ska vi ändra rumsstatus till 'playing' och gå till kontrollpanelen för spelet!");
-            // I nästa steg implementerar vi detta
+            showToast("Spelet laddas...", "success");
+            // alert() borttagen. Implementering av byte till 'playing' status kommer härnäst.
         }
     </script>
 </body>
