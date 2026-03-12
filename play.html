@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lock and Key - Elev</title>
+    <style>
+        :root {
+            --bg-color: #f0f4f8; --panel-bg: #ffffff;
+            --primary: #2563eb; --primary-hover: #1d4ed8;
+            --success: #16a34a; --danger: #ef4444;
+            --text-main: #1e293b; --text-muted: #64748b;
+            --border: #cbd5e1; --border-radius: 8px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; touch-action: manipulation; }
+        
+        .card { background: var(--panel-bg); padding: 30px; border-radius: var(--border-radius); box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        .card h1 { margin-bottom: 20px; color: var(--primary); }
+        
+        .form-group { margin-bottom: 15px; text-align: left; }
+        .form-group label { display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 5px; color: var(--text-muted); }
+        input[type="text"] { width: 100%; padding: 12px; border: 2px solid var(--border); border-radius: 6px; font-size: 1rem; outline: none; transition: border-color 0.2s; text-align: center;}
+        input[type="text"]:focus { border-color: var(--primary); }
+        
+        button { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 1.1rem; font-weight: bold; color: white; background-color: var(--primary); transition: background 0.2s; margin-top: 10px; }
+        button:hover { background-color: var(--primary-hover); }
+
+        /* Väntrummet */
+        #waitingScreen { display: none; width: 100%; max-width: 500px; display: flex; flex-direction: column; align-items: center; }
+        .status-badge { background: #e2e8f0; padding: 8px 16px; border-radius: 20px; font-weight: bold; margin-bottom: 20px; display: inline-block; }
+        
+        /* Minispelet */
+        .minigame-container { margin-top: 20px; background: white; padding: 20px; border-radius: var(--border-radius); box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center; width: 100%; }
+        #gameCanvas { background: #1e293b; border-radius: 50%; cursor: pointer; margin-top: 15px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); -webkit-tap-highlight-color: transparent; }
+        .score-display { font-size: 1.5rem; font-weight: bold; color: var(--primary); margin-top: 10px; }
+        .game-instructions { font-size: 0.85rem; color: var(--text-muted); margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="card" id="joinScreen">
+        <h1>Lock and Key 🗝️</h1>
+        <div class="form-group">
+            <label>Rumskod</label>
+            <input type="text" id="roomInput" placeholder="T.ex. A1B2" autocomplete="off" style="text-transform: uppercase;">
+        </div>
+        <div class="form-group">
+            <label>Ditt namn</label>
+            <input type="text" id="nameInput" placeholder="Skriv in ditt namn" autocomplete="off">
+        </div>
+        <button onclick="joinRoom()">Gå med</button>
+    </div>
+
+    <div id="waitingScreen" style="display: none;">
+        <div class="status-badge" id="playerStatus">Väntar på lagindelning... 👀</div>
+        
+        <div class="minigame-container">
+            <h3>Låsdyrkaren</h3>
+            <div class="score-display">Poäng: <span id="scoreVal">0</span></div>
+            <canvas id="gameCanvas" width="250" height="250"></canvas>
+            <p class="game-instructions">Tryck på cirkeln exakt när dyrken är i den gröna zonen!</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDdGSoiqa1_xf9RK-LeWe3ttepzpt-ocLs",
+            authDomain: "lock-and-key-e96a1.firebaseapp.com",
+            projectId: "lock-and-key-e96a1",
+            storageBucket: "lock-and-key-e96a1.firebasestorage.app",
+            messagingSenderId: "632843065326",
+            appId: "1:632843065326:web:6dbe765294c3aefe7460ff"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Hämta rum från URL om det finns
+        const urlParams = new URLSearchParams(window.location.search);
+        let currentRoom = urlParams.get('room');
+        if (currentRoom) {
+            document.getElementById('roomInput').value = currentRoom.toUpperCase();
+        }
+
+        let playerId = localStorage.getItem('lockAndKey_playerId') || 'student_' + Date.now() + Math.random().toString(36).substr(2, 5);
+        let unsubscribe = null;
+
+        window.joinRoom = async function() {
+            const roomCode = document.getElementById('roomInput').value.trim().toUpperCase();
+            const playerName = document.getElementById('nameInput').value.trim();
+
+            if (!roomCode || !playerName) {
+                alert("Du måste fylla i både rumskod och namn!");
+                return;
+            }
+
+            // Kolla om rummet finns
+            const roomRef = doc(db, "rooms", roomCode);
+            const roomSnap = await getDoc(roomRef);
+
+            if (!roomSnap.exists()) {
+                alert("Hittar inte rummet. Kontrollera koden!");
+                return;
+            }
+
+            // Spara spelaren i Firebase
+            const playerRef = doc(db, "rooms", roomCode, "players", playerId);
+            await setDoc(playerRef, {
+                name: playerName,
+                team: null,
+                joinedAt: Date.now()
+            });
+
+            // Spara playerId så eleven kan ladda om sidan utan att försvinna
+            localStorage.setItem('lockAndKey_playerId', playerId);
+
+            // Byt vy
+            document.getElementById('joinScreen').style.display = 'none';
+            document.getElementById('waitingScreen').style.display = 'flex';
+            
+            // Uppdatera URL:en rent visuellt så de slipper skriva koden igen om de råkar ladda om
+            window.history.replaceState({}, '', `?room=${roomCode}`);
+
+            // Starta lyssnare på spelarens eget dokument
+            listenToGame(roomCode, playerId);
+            
+            // Starta minispelet
+            startMinigame();
+        };
+
+        function listenToGame(roomCode, pId) {
+            const playerRef = doc(db, "rooms", roomCode, "players", pId);
+            const roomRef = doc(db, "rooms", roomCode);
+
+            // Lyssna på sig själv (för team-indelning och kick)
+            unsubscribe = onSnapshot(playerRef, (docSnap) => {
+                if (!docSnap.exists()) {
+                    // Läraren har kickat eleven (raderat dokumentet)
+                    alert("Du blev utslängd från lobbyn. Var god skriv in ditt namn igen.");
+                    window.location.reload();
+                    return;
+                }
+
+                const data = docSnap.data();
+                const statusEl = document.getElementById('playerStatus');
+
+                if (data.team !== null) {
+                    statusEl.innerText = `✅ Du är placerad i Lag ${data.team}!`;
+                    statusEl.style.backgroundColor = 'var(--success)';
+                    statusEl.style.color = 'white';
+                } else {
+                    statusEl.innerText = `Väntar på lagindelning... 👀`;
+                    statusEl.style.backgroundColor = '#e2e8f0';
+                    statusEl.style.color = 'var(--text-main)';
+                }
+            });
+
+            // Lyssna på rummet (för att veta när spelet startar)
+            onSnapshot(roomRef, (roomSnap) => {
+                if(roomSnap.exists() && roomSnap.data().status === "playing") {
+                    alert("Nu kör vi! (Här kommer vi ladda själva spelet i nästa steg)");
+                    // window.location.href = `game.html?room=${roomCode}`;
+                }
+            });
+        }
+
+        // --- MINISPEL LOGIK: LÅSDYRKAREN ---
+        function startMinigame() {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const scoreEl = document.getElementById('scoreVal');
+            
+            let score = 0;
+            let angle = 0;
+            let speed = 0.03; // Start-hastighet (Radianer per frame)
+            
+            // Målets egenskaper (gröna zonen)
+            let targetStart = Math.random() * Math.PI * 2;
+            let targetWidth = 0.8; // Hur bred zonen är i radianer (ca 45 grader från början)
+            
+            let isAnimating = true;
+
+            function draw() {
+                if (!isAnimating) return;
+                
+                // Rensa canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const cx = canvas.width / 2;
+                const cy = canvas.height / 2;
+                const radius = cx - 20;
+
+                // Bakgrundscirkel (Låset)
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 15;
+                ctx.stroke();
+
+                // Mål-zonen (Grön)
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, targetStart, targetStart + targetWidth);
+                ctx.strokeStyle = '#22c55e';
+                ctx.lineWidth = 15;
+                ctx.stroke();
+
+                // Snurrande Dyrken (Röd)
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                // Mitten-pluppen
+                ctx.beginPath();
+                ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+                ctx.fillStyle = '#ef4444';
+                ctx.fill();
+
+                // Uppdatera vinkel
+                angle += speed;
+                if (angle > Math.PI * 2) angle -= Math.PI * 2;
+
+                requestAnimationFrame(draw);
+            }
+
+            // Klick/Touch för att dyrka
+            function tryUnlock(e) {
+                e.preventDefault(); // Förhindrar dubbelklick/zoom på mobiler
+
+                // Matematik för att se om 'angle' är inuti 'targetStart' till 'targetStart + targetWidth'
+                let end = targetStart + targetWidth;
+                let hit = false;
+                
+                if (end <= Math.PI * 2) {
+                    hit = (angle >= targetStart && angle <= end);
+                } else {
+                    // Om den gröna zonen går över gränsen mellan 360 och 0 grader
+                    hit = (angle >= targetStart || angle <= (end - Math.PI * 2));
+                }
+
+                if (hit) {
+                    // Träff!
+                    score++;
+                    scoreEl.innerText = score;
+                    speed += 0.005; // Öka hastigheten
+                    targetWidth = Math.max(0.15, targetWidth - 0.05); // Krymp zonen (men inte för liten)
+                    
+                    // Ny slumpmässig position för målet
+                    targetStart = Math.random() * Math.PI * 2;
+                    
+                    // Liten visuell blinkning
+                    canvas.style.boxShadow = "inset 0 0 40px rgba(34, 197, 94, 0.8)";
+                    setTimeout(() => canvas.style.boxShadow = "inset 0 0 20px rgba(0,0,0,0.5)", 150);
+                } else {
+                    // Miss!
+                    score = 0;
+                    scoreEl.innerText = score;
+                    speed = 0.03; // Återställ hastighet
+                    targetWidth = 0.8; // Återställ zonens storlek
+                    
+                    // Visuell röd blinkning
+                    canvas.style.boxShadow = "inset 0 0 40px rgba(239, 68, 68, 0.8)";
+                    setTimeout(() => canvas.style.boxShadow = "inset 0 0 20px rgba(0,0,0,0.5)", 150);
+                }
+            }
+
+            canvas.addEventListener('mousedown', tryUnlock);
+            canvas.addEventListener('touchstart', tryUnlock, {passive: false});
+
+            draw(); // Starta loopen
+        }
+    </script>
+</body>
+</html>
