@@ -64,6 +64,14 @@
         
         .points-info { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px; }
         .points-info strong { color: var(--success); }
+
+        /* ANIMATION NÄR MAN KLARAT EN FRÅGA */
+        @keyframes questionSuccess {
+            0% { transform: scale(1); background-color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+            30% { transform: scale(1.02); background-color: #dcfce7; box-shadow: 0 10px 25px rgba(34, 197, 94, 0.4); }
+            100% { transform: scale(1); background-color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        }
+        .animate-success { animation: questionSuccess 0.8s ease-out; }
     </style>
 </head>
 <body>
@@ -72,8 +80,8 @@
 
     <div class="card" id="joinScreen">
         <h1>Lock and Key 🗝️</h1>
-        <div class="form-group"><label>Rumskod</label><input type="text" id="roomInput" placeholder="T.ex. A1B2" autocomplete="off" style="text-transform: uppercase;"></div>
-        <div class="form-group"><label>Ditt namn</label><input type="text" id="nameInput" placeholder="Skriv in ditt namn" autocomplete="off"></div>
+        <div class="form-group"><label>Rumskod</label><input type="text" id="roomInput" placeholder="T.ex. A1B2" autocomplete="off" style="text-transform: uppercase;" onkeypress="if(event.key === 'Enter') joinRoom()"></div>
+        <div class="form-group"><label>Ditt namn</label><input type="text" id="nameInput" placeholder="Skriv in ditt namn" autocomplete="off" onkeypress="if(event.key === 'Enter') joinRoom()"></div>
         <button onclick="joinRoom()">Gå med</button>
         <div class="error-msg" id="loginError"></div>
     </div>
@@ -99,7 +107,7 @@
             <div class="score-pill">Total Poäng: <span id="teamScoreDisplay">0</span></div>
         </div>
         
-        <div class="question-box">
+        <div class="question-box" id="qBox">
             <div style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">Fråga <span id="qIndexDisplay">1</span></div>
             <div class="question-text" id="questionText">Laddar fråga...</div>
             
@@ -108,14 +116,13 @@
             
             <div class="points-info">Rätt svar ger: <strong id="potentialPointsDisplay">100</strong> poäng</div>
             
-            <input type="text" id="answerInput" placeholder="Skriv ert gemensamma svar här..." autocomplete="off">
+            <input type="text" id="answerInput" placeholder="Skriv ert gemensamma svar här..." autocomplete="off" onkeypress="if(event.key === 'Enter') submitAnswer()">
             <button onclick="submitAnswer()">Lås upp 🔓</button>
             <button id="skipBtn" class="btn-warning" style="margin-top: 10px;" onclick="skipQuestion()" disabled>Hoppa över frågan (Efter 5 fel)</button>
         </div>
     </div>
 
     <script>
-        // Samma algoritm som i Host, används för att hasha elevernas gissning innan den jämförs!
         function hashAnswer(str) {
             let hash = 0; let s = str.toString().trim().toLowerCase();
             for (let i = 0; i < s.length; i++) {
@@ -166,6 +173,9 @@
         let roomData = null;
         let lastKnownPenalty = 0;
         let isMinigameActive = false;
+        
+        // Tracker för animationen
+        window.lastQuestionIndex = -1;
 
         function showToast(msg, type = "error") {
             const toast = document.getElementById('toastMessage');
@@ -211,13 +221,16 @@
                     return; 
                 }
 
+                // DYNAMISK NAMNUPPDATERING FÖR VÄNTRUMMET
+                document.getElementById('greetingName').innerText = `Välkommen, ${me.name}!`;
+
                 myTeamId = me.team;
                 
                 const statusEl = document.getElementById('playerStatus');
                 if (myTeamId) {
                     statusEl.innerHTML = `✅ Lag: <strong>${getTeamName(myTeamId)}</strong>`;
                     statusEl.style.backgroundColor = getTeamColor(myTeamId);
-                    statusEl.style.boxShadow = `0 4px 10px ${getTeamColor(myTeamId)}88`; // Glow i lagets färg
+                    statusEl.style.boxShadow = `0 4px 10px ${getTeamColor(myTeamId)}88`;
                 } else {
                     statusEl.innerHTML = `Väntar på lagindelning... 👀`;
                     statusEl.style.backgroundColor = '#e2e8f0';
@@ -231,7 +244,7 @@
                 if(roomSnap.exists()) {
                     roomData = roomSnap.data();
                     if(roomData.status === "playing" && myTeamId) {
-                        isMinigameActive = false; // Stäng av snurran
+                        isMinigameActive = false; 
                         document.getElementById('waitingScreen').style.display = 'none';
                         document.getElementById('gameScreen').style.display = 'flex';
                         renderGameUI();
@@ -247,6 +260,18 @@
             if(!myTeamId || !roomData || !roomData.teamData[myTeamId]) return;
 
             const tData = roomData.teamData[myTeamId];
+            
+            // --- SUCCESS ANIMATION ---
+            // Om index har ökat, spela upp animationen för alla lagkamrater
+            if (window.lastQuestionIndex !== -1 && tData.currentQuestionIndex > window.lastQuestionIndex) {
+                const qBox = document.getElementById('qBox');
+                // Nollställ animationen så att den kan triggas om
+                qBox.classList.remove('animate-success');
+                void qBox.offsetWidth; // Magi: Tvingar webbläsaren att uppdatera DOM:en
+                qBox.classList.add('animate-success');
+            }
+            window.lastQuestionIndex = tData.currentQuestionIndex;
+
             const nameEl = document.getElementById('teamNameDisplay');
             nameEl.innerText = getTeamName(myTeamId);
             nameEl.style.backgroundColor = getTeamColor(myTeamId);
@@ -283,12 +308,15 @@
             const myClues = currentQ.clues.filter((clue, index) => index % myTeammates.length === myIndexInTeam);
             
             document.getElementById('cluesContainer').innerHTML = myClues.map(c => `<div class="clue-item">💡 ${c}</div>`).join('') || "<em>Du har inga ledtrådar för denna fråga. Lyssna på ditt lag!</em>";
+            
+            // Sätt fokus på rutan igen automatiskt så man slipper klicka varje gång
+            setTimeout(() => document.getElementById('answerInput').focus(), 100);
         }
 
         window.submitAnswer = async function() {
             if(!myTeamId || !roomData) return;
             const inputEl = document.getElementById('answerInput');
-            const answer = inputEl.value; // Plockar ut texten
+            const answer = inputEl.value; 
             if(!answer.trim()) return;
 
             const tData = roomData.teamData[myTeamId];
@@ -297,21 +325,18 @@
             
             inputEl.value = ''; 
 
-            // HÄR SKER MAGIN. Vi hashar gissningen och jämför med den sparade hashen.
             const hashedGuess = hashAnswer(answer);
 
             if (hashedGuess === currentQ.answer) {
-                showToast("Rätt svar! Snyggt jobbat!", "info"); // Använder mörkgrå toast för success så det inte krockar med rött error
+                showToast("Rätt svar! Snyggt jobbat!", "info"); 
                 const potentialPoints = Math.max(10, Math.floor(100 * Math.pow(0.9, tData.wrongGuesses)));
                 let nextIndex = tData.currentQuestionIndex + 1;
                 
-                // Om Oändlighetsloop är påslaget
                 if (nextIndex >= pkg.questions.length && pkg.isAdvanced) {
                     try {
                         const generator = new Function(pkg.generatorCode);
                         const newQ = generator();
                         if (newQ && newQ.question && newQ.answer && newQ.clues) {
-                            // Hashar det nyskapta svaret innan vi trycker in det i databasen för lagkamraterna
                             newQ.answer = hashAnswer(newQ.answer);
                             await updateDoc(doc(db, "rooms", window.currentRoomCode), { "package.questions": arrayUnion(newQ) });
                         }
