@@ -206,7 +206,7 @@ return {
                         <div class="package-meta">${pkg.questions.length} fasta frågor</div>
                     </div>
                     <div class="btn-group">
-                        <button class="btn-primary btn-sm" onclick="playPackagePlaceholder()">Spela</button>
+                        <button class="btn-primary btn-sm" onclick="playPackagePlaceholder(${index})">Spela</button>
                         <button class="btn-primary btn-sm" onclick="editPackage(${index})">Redigera</button>
                         <button class="btn-outline btn-sm" onclick="exportPackage(${index})">Exportera</button>
                         <button class="btn-danger btn-sm" onclick="deletePackage(${index})">Ta bort</button>
@@ -405,30 +405,33 @@ return {
             } catch (err) { alert("Fel: " + err.message); }
         }
 
-        // Byt ut den gamla funktionen mot denna:
-function playPackagePlaceholder(index) {
-    const pkg = packages[index];
-    
-    // 1. Generera en kort 4-teckens rumskod (ex: K9M2)
-    const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
-    
-    // 2. Generera en lång säker host-token
-    const hostToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
-    
-    // 3. Spara temporärt i localStorage så vi kan ta med det till nästa sida
-    // I nästa steg ska host.html ta denna data och skicka till Firebase!
-    const pendingRoomData = {
-        roomCode: roomCode,
-        hostToken: hostToken,
-        package: pkg
-    };
-    
-    localStorage.setItem('lockAndKey_pendingRoom', JSON.stringify(pendingRoomData));
-    localStorage.setItem('lockAndKey_hostToken_' + roomCode, hostToken); // Spara bevis på ägarskap
-    
-    // 4. Skicka läraren till host-sidan
-    window.location.href = `host.html?room=${roomCode}`;
-}
+        function playPackagePlaceholder(index) {
+            if (index === undefined || !packages[index]) {
+                alert("Något gick fel! Koden hittade inte paketet.");
+                return;
+            }
+
+            const pkg = packages[index];
+            
+            // 1. Generera en kort 4-teckens rumskod (ex: K9M2)
+            const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+            
+            // 2. Generera en lång säker host-token
+            const hostToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
+            
+            // 3. Spara temporärt i localStorage
+            const pendingRoomData = {
+                roomCode: roomCode,
+                hostToken: hostToken,
+                package: pkg
+            };
+            
+            localStorage.setItem('lockAndKey_pendingRoom', JSON.stringify(pendingRoomData));
+            localStorage.setItem('lockAndKey_hostToken_' + roomCode, hostToken);
+            
+            // 4. Skicka läraren till host-sidan
+            window.location.href = `host.html?room=${roomCode}`;
+        }
 
         init();
     </script>
