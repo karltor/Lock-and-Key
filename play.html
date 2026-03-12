@@ -114,6 +114,19 @@
         </div>
     </div>
 
+    <script>
+        // Samma algoritm som i Host, används för att hasha elevernas gissning innan den jämförs!
+        function hashAnswer(str) {
+            let hash = 0; let s = str.toString().trim().toLowerCase();
+            for (let i = 0; i < s.length; i++) {
+                let char = s.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return hash.toString();
+        }
+    </script>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
         import { getFirestore, doc, setDoc, onSnapshot, getDoc, collection, deleteDoc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
@@ -152,7 +165,7 @@
         let allPlayersInRoom = [];
         let roomData = null;
         let lastKnownPenalty = 0;
-        let isMinigameActive = false; // För att stänga av snurran när spelet börjar
+        let isMinigameActive = false;
 
         function showToast(msg, type = "error") {
             const toast = document.getElementById('toastMessage');
@@ -178,7 +191,7 @@
             document.getElementById('greetingName').innerText = `Välkommen, ${playerName}!`;
             window.history.replaceState({}, '', `?room=${roomCode}`);
 
-            startMinigame(); // Starta väntespelet
+            startMinigame(); 
             listenToGame(roomCode);
         };
 
@@ -275,8 +288,8 @@
         window.submitAnswer = async function() {
             if(!myTeamId || !roomData) return;
             const inputEl = document.getElementById('answerInput');
-            const answer = inputEl.value.trim().toLowerCase();
-            if(!answer) return;
+            const answer = inputEl.value; // Plockar ut texten
+            if(!answer.trim()) return;
 
             const tData = roomData.teamData[myTeamId];
             const pkg = roomData.package;
@@ -284,16 +297,22 @@
             
             inputEl.value = ''; 
 
-            if (answer === currentQ.answer.trim().toLowerCase()) {
+            // HÄR SKER MAGIN. Vi hashar gissningen och jämför med den sparade hashen.
+            const hashedGuess = hashAnswer(answer);
+
+            if (hashedGuess === currentQ.answer) {
                 showToast("Rätt svar! Snyggt jobbat!", "info"); // Använder mörkgrå toast för success så det inte krockar med rött error
                 const potentialPoints = Math.max(10, Math.floor(100 * Math.pow(0.9, tData.wrongGuesses)));
                 let nextIndex = tData.currentQuestionIndex + 1;
                 
+                // Om Oändlighetsloop är påslaget
                 if (nextIndex >= pkg.questions.length && pkg.isAdvanced) {
                     try {
                         const generator = new Function(pkg.generatorCode);
                         const newQ = generator();
                         if (newQ && newQ.question && newQ.answer && newQ.clues) {
+                            // Hashar det nyskapta svaret innan vi trycker in det i databasen för lagkamraterna
+                            newQ.answer = hashAnswer(newQ.answer);
                             await updateDoc(doc(db, "rooms", window.currentRoomCode), { "package.questions": arrayUnion(newQ) });
                         }
                     } catch (e) { console.error("Gen fel"); }
