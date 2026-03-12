@@ -111,7 +111,7 @@
         window.roomId = new URLSearchParams(window.location.search).get('room');
         window.localToken = localStorage.getItem('lockAndKey_hostToken_' + window.roomId);
         window.players = [];
-        window.numberOfTeams = 4; // Startar med 4 tomma lag som UI-utfyllnad
+        window.numberOfTeams = 4;
 
         async function initHost() {
             if (!window.roomId || !window.localToken) {
@@ -122,27 +122,35 @@
 
             document.getElementById('roomCodeDisplay').innerText = `Rum: ${window.roomId}`;
 
-            // 1. Kontrollera om rummet precis skapades (data i localStorage från index.html)
             const pendingDataStr = localStorage.getItem('lockAndKey_pendingRoom');
             if (pendingDataStr) {
                 const pendingData = JSON.parse(pendingDataStr);
-                if (pendingData.roomCode === window.roomId && pendingData.hostToken === window.localToken) {
-                    // Spara paketet till Firebase
-                    await setDoc(doc(window.db, "rooms", window.roomId), {
-                        hostToken: window.localToken,
-                        status: "lobby",
-                        package: pendingData.package,
-                        createdAt: Date.now()
-                    });
-                    // Rensa så vi inte laddar upp igen vid uppdatering av sidan
+                
+                // --- NY SÄKERHETSCHECK ---
+                if (!pendingData.package) {
+                    alert("Fel: Frågepaketet följde inte med! \n\nGå tillbaka till din startsida, gör en hård uppdatering (Ctrl+F5) och försök igen.");
                     localStorage.removeItem('lockAndKey_pendingRoom');
+                    return;
+                }
+
+                if (pendingData.roomCode === window.roomId && pendingData.hostToken === window.localToken) {
+                    try {
+                        await setDoc(doc(window.db, "rooms", window.roomId), {
+                            hostToken: window.localToken,
+                            status: "lobby",
+                            package: pendingData.package,
+                            createdAt: Date.now()
+                        });
+                        localStorage.removeItem('lockAndKey_pendingRoom');
+                    } catch (error) {
+                        console.error("Firebase fel:", error);
+                        alert("Kunde inte spara rummet: " + error.message);
+                    }
                 }
             }
 
-            // Rita upp initiala lag-boxar
             renderTeamsGrid();
 
-            // 2. Lyssna på elever som ansluter
             const playersRef = collection(window.db, "rooms", window.roomId, "players");
             onSnapshot(playersRef, (snapshot) => {
                 window.players = [];
@@ -150,8 +158,6 @@
                     window.players.push({ id: doc.id, ...doc.data() });
                 });
                 renderAllPlayers();
-                
-                // Aktivera start-knappen om alla är i ett lag
                 checkReadyToStart();
             });
         }
