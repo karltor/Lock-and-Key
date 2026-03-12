@@ -16,45 +16,69 @@
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: var(--bg-color); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; }
+        body { background-color: var(--bg-color); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
-        header { background-color: var(--primary); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        header { background-color: var(--primary); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10; }
         .room-info h1 { font-size: 1.8rem; margin-bottom: 5px; }
         .room-info p { font-size: 0.9rem; opacity: 0.9; }
         
         .main-container { display: flex; flex: 1; padding: 20px; gap: 20px; overflow: hidden; }
 
-        /* Vänster: Oplacerade elever */
+        /* Vänster: Oplacerade elever (Lobby) */
         .waiting-room { flex: 0 0 300px; background: var(--panel-bg); border-radius: var(--border-radius); border: 1px solid var(--border); display: flex; flex-direction: column; }
         .panel-header { padding: 15px; border-bottom: 1px solid var(--border); background: #f8fafc; border-radius: var(--border-radius) var(--border-radius) 0 0; }
         .player-list { padding: 10px; flex: 1; overflow-y: auto; background: #f1f5f9; min-height: 200px; }
 
-        /* Höger: Lagindelning */
+        /* Höger: Lagindelning (Lobby) */
         .teams-area { flex: 1; background: var(--panel-bg); border-radius: var(--border-radius); border: 1px solid var(--border); display: flex; flex-direction: column; }
         .teams-grid { padding: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; overflow-y: auto; flex: 1; align-items: start; }
         
-        /* Team Containers */
         .team-box { border: 2px dashed var(--border); border-radius: var(--border-radius); min-height: 150px; background: #fff; display: flex; flex-direction: column; transition: border-color 0.2s; }
         .team-box.drag-over { border-color: var(--success); background: #f0fdf4; }
         .team-header { background: #e2e8f0; padding: 8px 12px; font-weight: bold; border-radius: 4px 4px 0 0; text-align: center; }
         .team-players { padding: 10px; flex: 1; min-height: 100px; }
 
-        /* Elev-brickan */
         .player-chip { background: white; border: 1px solid var(--border); padding: 8px 12px; border-radius: 20px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: grab; box-shadow: 0 1px 2px rgba(0,0,0,0.05); font-weight: 500; }
         .player-chip:active { cursor: grabbing; }
         .player-actions { display: flex; gap: 5px; }
-        .action-btn { background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.5; transition: opacity 0.2s; }
+        .action-btn { background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.5; transition: opacity 0.2s; padding: 0; }
         .action-btn:hover { opacity: 1; }
 
         /* Knappar och Toast */
         button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: white; transition: background 0.2s; }
         .btn-primary { background-color: var(--primary); } .btn-primary:hover { background-color: var(--primary-hover); }
         .btn-success { background-color: var(--success); } .btn-success:hover { background-color: var(--success-hover); }
+        .btn-danger { background-color: var(--danger); } .btn-danger:hover { background-color: var(--danger-hover); }
         .btn-warning { background-color: var(--warning); color: white; }
         
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--text-main); color: white; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 1000; font-weight: bold; display: none; }
         .toast.error { background: var(--danger); }
         .toast.success { background: var(--success); }
+
+        /* --- GAME MODE STYLES --- */
+        #gameScreen { display: none; flex-direction: column; flex: 1; padding: 20px; overflow: hidden; }
+        .game-header-bar { display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 25px; border-radius: var(--border-radius); box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .timer-display { font-size: 2.5rem; font-weight: bold; font-family: monospace; color: var(--text-main); display: flex; align-items: center; gap: 15px;}
+        .timer-btn { background: #e2e8f0; color: var(--text-main); font-size: 1.2rem; padding: 5px 15px; border-radius: 20px; }
+        .timer-btn:hover { background: #cbd5e1; }
+        
+        .leaderboard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; overflow-y: auto; flex: 1; padding-bottom: 20px; align-items: start; }
+        .lb-card { background: white; border: 1px solid var(--border); border-radius: var(--border-radius); padding: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .lb-info h2 { font-size: 1.2rem; margin-bottom: 5px; color: var(--text-main); }
+        .lb-info p { font-size: 0.9rem; color: var(--text-muted); }
+        .lb-score { font-size: 1.8rem; font-weight: bold; color: var(--primary); text-align: right; }
+
+        /* --- PODIUM STYLES --- */
+        #podiumScreen { display: none; flex-direction: column; align-items: center; justify-content: center; flex: 1; }
+        .podium-container { display: flex; align-items: flex-end; justify-content: center; gap: 10px; height: 300px; margin-top: 50px; }
+        .podium-place { display: flex; flex-direction: column; align-items: center; width: 120px; }
+        .podium-name { font-weight: bold; font-size: 1.2rem; margin-bottom: 10px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;}
+        .podium-score { font-size: 1.1rem; color: white; margin-top: 10px; font-weight: bold; }
+        .step { width: 100%; border-radius: 8px 8px 0 0; display: flex; justify-content: center; box-shadow: 0 -4px 10px rgba(0,0,0,0.1); }
+        
+        .place-2 .step { height: 150px; background: silver; }
+        .place-1 .step { height: 220px; background: gold; }
+        .place-3 .step { height: 100px; background: #cd7f32; }
     </style>
 </head>
 <body>
@@ -64,41 +88,64 @@
     <header>
         <div class="room-info">
             <h1 id="roomCodeDisplay">Rum: LADDAR...</h1>
-            <p>Väntar på att elever ska ansluta</p>
+            <p id="roomStatusText">Väntar på att elever ska ansluta</p>
         </div>
-        <div style="display: flex; gap: 10px;">
+        <div style="display: flex; gap: 10px;" id="headerActions">
             <button class="btn-primary" onclick="copyJoinLink()">🔗 Kopiera länk till elever</button>
             <button class="btn-success" onclick="startGame()" id="startBtn" disabled>▶️ Starta Spelet</button>
         </div>
     </header>
 
-    <div class="main-container">
+    <div class="main-container" id="lobbyScreen">
         <aside class="waiting-room">
             <div class="panel-header">
                 <h3>Väntrum (Oplacerade)</h3>
-                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">Dra eleverna till ett lag eller använd knapparna till höger.</p>
             </div>
-            <div class="player-list" id="unassignedList" ondragover="allowDrop(event)" ondrop="drop(event, null)">
-                </div>
+            <div class="player-list" id="unassignedList" ondragover="allowDrop(event)" ondrop="drop(event, null)"></div>
         </aside>
-
         <main class="teams-area">
             <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h3>Lagen</h3>
                 <div style="display: flex; gap: 10px;">
-                    <button class="btn-warning" onclick="randomizeTeams(2)">🎲 Slumpa (Par)</button>
-                    <button class="btn-warning" onclick="randomizeTeams(3)">🎲 Slumpa (Treor)</button>
-                    <button class="btn-primary" onclick="addEmptyTeam()" style="background: transparent; color: var(--primary); border: 1px solid var(--primary);">+ Nytt tomt lag</button>
+                    <button class="btn-warning" onclick="randomizeTeams(2)">🎲 Par</button>
+                    <button class="btn-warning" onclick="randomizeTeams(3)">🎲 Treor</button>
+                    <button class="btn-primary" onclick="addEmptyTeam()" style="background: transparent; color: var(--primary); border: 1px solid var(--primary);">+ Lag</button>
                 </div>
             </div>
-            <div class="teams-grid" id="teamsGrid">
-                </div>
+            <div class="teams-grid" id="teamsGrid"></div>
         </main>
+    </div>
+
+    <div id="gameScreen">
+        <div class="game-header-bar">
+            <div>
+                <h2 style="color: var(--text-main);">Live Leaderboard</h2>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Elevernas framsteg uppdateras i realtid.</p>
+            </div>
+            <div class="timer-display">
+                <button class="timer-btn" onclick="adjustTimer(-60)">-1m</button>
+                <span id="timerText">10:00</span>
+                <button class="timer-btn" onclick="adjustTimer(60)">+1m</button>
+            </div>
+            <button class="btn-danger" onclick="endGame()">Avsluta Spelet Nu</button>
+        </div>
+        <div class="leaderboard-grid" id="leaderboardGrid">
+            </div>
+    </div>
+
+    <div id="podiumScreen">
+        <h1 style="font-size: 3rem; color: var(--text-main);">Spelet är slut!</h1>
+        <p style="font-size: 1.2rem; color: var(--text-muted);">Här är slutresultatet:</p>
+        
+        <div class="podium-container" id="podiumContainer">
+            </div>
+        
+        <button class="btn-primary" style="margin-top: 50px; font-size: 1.2rem; padding: 15px 30px;" onclick="window.location.href='index.html'">Tillbaka till Start</button>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, collection, onSnapshot, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, updateDoc, deleteDoc, writeBatch, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDdGSoiqa1_xf9RK-LeWe3ttepzpt-ocLs",
@@ -112,11 +159,21 @@
         const app = initializeApp(firebaseConfig);
         window.db = getFirestore(app);
 
-        // State
         window.roomId = new URLSearchParams(window.location.search).get('room');
         window.localToken = localStorage.getItem('lockAndKey_hostToken_' + window.roomId);
         window.players = [];
         window.numberOfTeams = 4;
+        window.gameTimerInterval = null;
+        window.roomData = null;
+
+        const ADJECTIVES = ["De Snabba", "De Starka", "De Listiga", "De Modiga", "De Galna", "De Smarta", "De Vilda", "De Mystiska", "De Tysta", "De Lysande"];
+        const NOUNS = ["Stormarna", "Örnarna", "Tornen", "Vargarna", "Björnarna", "Hajarna", "Lejonen", "Tigrarna", "Falkarna", "Kobrorna"];
+
+        window.getTeamName = function(index) {
+            const adjIndex = Math.floor((index - 1) / NOUNS.length) % ADJECTIVES.length;
+            const nounIndex = (index - 1) % NOUNS.length;
+            return index <= NOUNS.length ? NOUNS[nounIndex] : `${ADJECTIVES[adjIndex]} ${NOUNS[nounIndex]}`;
+        }
 
         async function initHost() {
             if (!window.roomId || !window.localToken) {
@@ -130,217 +187,241 @@
             const pendingDataStr = localStorage.getItem('lockAndKey_pendingRoom');
             if (pendingDataStr) {
                 const pendingData = JSON.parse(pendingDataStr);
-                
-                if (!pendingData.package) {
-                    showToast("Fel: Frågepaketet saknas. Gå tillbaka och gör en hård uppdatering (Ctrl+F5).", "error");
-                    localStorage.removeItem('lockAndKey_pendingRoom');
-                    return;
-                }
-
                 if (pendingData.roomCode === window.roomId && pendingData.hostToken === window.localToken) {
-                    try {
-                        await setDoc(doc(window.db, "rooms", window.roomId), {
-                            hostToken: window.localToken,
-                            status: "lobby",
-                            package: pendingData.package,
-                            createdAt: Date.now()
-                        });
-                        localStorage.removeItem('lockAndKey_pendingRoom');
-                    } catch (error) {
-                        showToast("Kunde inte spara rummet: " + error.message, "error");
-                    }
+                    await setDoc(doc(window.db, "rooms", window.roomId), {
+                        hostToken: window.localToken,
+                        status: "lobby",
+                        package: pendingData.package,
+                        createdAt: Date.now()
+                    });
+                    localStorage.removeItem('lockAndKey_pendingRoom');
                 }
             }
 
             renderTeamsGrid();
 
-            const playersRef = collection(window.db, "rooms", window.roomId, "players");
-            onSnapshot(playersRef, (snapshot) => {
+            // Lyssna på elever (Lobby)
+            onSnapshot(collection(window.db, "rooms", window.roomId, "players"), (snapshot) => {
                 window.players = [];
-                snapshot.forEach(doc => {
-                    window.players.push({ id: doc.id, ...doc.data() });
-                });
-                renderAllPlayers();
-                checkReadyToStart();
+                snapshot.forEach(doc => window.players.push({ id: doc.id, ...doc.data() }));
+                if(document.getElementById('lobbyScreen').style.display !== 'none') {
+                    renderAllPlayers();
+                    checkReadyToStart();
+                }
             });
+
+            // Lyssna på rummet (Spelet)
+            onSnapshot(doc(window.db, "rooms", window.roomId), (docSnap) => {
+                if(docSnap.exists()) {
+                    window.roomData = docSnap.data();
+                    
+                    if(window.roomData.status === 'playing') {
+                        document.getElementById('lobbyScreen').style.display = 'none';
+                        document.getElementById('headerActions').style.display = 'none';
+                        document.getElementById('gameScreen').style.display = 'flex';
+                        document.getElementById('roomStatusText').innerText = "Spelet är igång!";
+                        
+                        renderLeaderboard();
+                        
+                        if(!window.gameTimerInterval && window.roomData.timerEndsAt) {
+                            startLocalTimer();
+                        }
+                    } else if (window.roomData.status === 'finished') {
+                        document.getElementById('lobbyScreen').style.display = 'none';
+                        document.getElementById('gameScreen').style.display = 'none';
+                        document.getElementById('headerActions').style.display = 'none';
+                        document.getElementById('podiumScreen').style.display = 'flex';
+                        document.getElementById('roomStatusText').innerText = "Spelet är avslutat!";
+                        clearInterval(window.gameTimerInterval);
+                        renderPodium();
+                    }
+                }
+            });
+        }
+
+        window.startGame = async function() {
+            if(!confirm("Alla oplacerade elever kommer tas bort från spelet. Vill du starta?")) return;
+            
+            // Hitta alla aktiva lag-IDn
+            const activeTeams = new Set();
+            window.players.forEach(p => { if(p.team) activeTeams.add(p.team); });
+
+            const initialTeamData = {};
+            activeTeams.forEach(teamId => {
+                initialTeamData[teamId] = { score: 0, currentQuestionIndex: 0, wrongGuesses: 0, lastPenalty: 0 };
+            });
+
+            await updateDoc(doc(window.db, "rooms", window.roomId), {
+                status: "playing",
+                teamData: initialTeamData,
+                timerEndsAt: Date.now() + 10 * 60 * 1000 // 10 Minuter framåt
+            });
+        }
+
+        window.adjustTimer = async function(seconds) {
+            if(!window.roomData || !window.roomData.timerEndsAt) return;
+            const newTime = window.roomData.timerEndsAt + (seconds * 1000);
+            await updateDoc(doc(window.db, "rooms", window.roomId), { timerEndsAt: newTime });
+        }
+
+        function startLocalTimer() {
+            window.gameTimerInterval = setInterval(() => {
+                const now = Date.now();
+                const diff = window.roomData.timerEndsAt - now;
+                
+                if (diff <= 0) {
+                    clearInterval(window.gameTimerInterval);
+                    document.getElementById('timerText').innerText = "00:00";
+                    window.endGame();
+                    return;
+                }
+
+                const m = Math.floor(diff / 60000);
+                const s = Math.floor((diff % 60000) / 1000);
+                document.getElementById('timerText').innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                
+                if (diff < 60000) document.getElementById('timerText').style.color = "var(--danger)";
+                else document.getElementById('timerText').style.color = "var(--text-main)";
+
+            }, 500);
+        }
+
+        function renderLeaderboard() {
+            const lbGrid = document.getElementById('leaderboardGrid');
+            if(!window.roomData || !window.roomData.teamData) return;
+
+            const teamsArray = Object.keys(window.roomData.teamData).map(tId => ({
+                id: tId,
+                name: window.getTeamName(parseInt(tId)),
+                ...window.roomData.teamData[tId]
+            })).sort((a, b) => b.score - a.score);
+
+            lbGrid.innerHTML = teamsArray.map((t, index) => {
+                const totalQ = window.roomData.package.questions.length;
+                return `
+                    <div class="lb-card" style="${index === 0 ? 'border-color: gold; border-width: 2px;' : ''}">
+                        <div class="lb-info">
+                            <h2>${index + 1}. ${t.name}</h2>
+                            <p>Fråga ${t.currentQuestionIndex + 1} av ${totalQ}</p>
+                            <button class="btn-danger" style="margin-top: 8px; padding: 4px 8px; font-size: 0.75rem;" onclick="givePenalty('${t.id}')">-50p (Fusk)</button>
+                        </div>
+                        <div class="lb-score">${t.score}p</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        window.givePenalty = async function(teamId) {
+            if(!window.roomData.teamData[teamId]) return;
+            const currentScore = window.roomData.teamData[teamId].score;
+            const newScore = Math.max(0, currentScore - 50); // Låt oss sätta golv på 0p
+            
+            // Uppdaterar specifik property i en Map
+            await updateDoc(doc(window.db, "rooms", window.roomId), {
+                [`teamData.${teamId}.score`]: newScore,
+                [`teamData.${teamId}.lastPenalty`]: Date.now() // Denna triggar röda blinkningen hos eleverna!
+            });
+            showToast("Straffpoäng utdelad!", "success");
+        }
+
+        window.endGame = async function() {
+            await updateDoc(doc(window.db, "rooms", window.roomId), { status: "finished" });
+        }
+
+        function renderPodium() {
+            const container = document.getElementById('podiumContainer');
+            if(!window.roomData || !window.roomData.teamData) return;
+
+            const teams = Object.keys(window.roomData.teamData).map(tId => ({
+                name: window.getTeamName(parseInt(tId)),
+                score: window.roomData.teamData[tId].score
+            })).sort((a, b) => b.score - a.score);
+
+            if (teams.length === 0) return;
+
+            // Plats 2, 1, 3 ordning för visuell trappa
+            const p2 = teams[1] ? `<div class="podium-place place-2"><div class="podium-name">${teams[1].name}</div><div class="step"><div class="podium-score">${teams[1].score}p</div></div></div>` : '';
+            const p1 = teams[0] ? `<div class="podium-place place-1"><div class="podium-name">👑 ${teams[0].name}</div><div class="step"><div class="podium-score">${teams[0].score}p</div></div></div>` : '';
+            const p3 = teams[2] ? `<div class="podium-place place-3"><div class="podium-name">${teams[2].name}</div><div class="step"><div class="podium-score">${teams[2].score}p</div></div></div>` : '';
+
+            container.innerHTML = p2 + p1 + p3;
         }
 
         initHost();
     </script>
 
     <script>
-        // --- TOAST MEDDELANDEN ---
+        // --- LOBBY FUNKTIONER (Omslutna för att nås globalt) ---
         function showToast(msg, type = "normal") {
             const toast = document.getElementById('toastMessage');
-            toast.innerText = msg;
-            toast.className = 'toast';
+            toast.innerText = msg; toast.className = 'toast';
             if(type === 'error') toast.classList.add('error');
             if(type === 'success') toast.classList.add('success');
-            
-            toast.style.display = 'block';
-            setTimeout(() => toast.style.display = 'none', 3000);
-        }
-
-        // --- LAGNAMNSGENERATOR ---
-        const ADJECTIVES = ["De Snabba", "De Starka", "De Listiga", "De Modiga", "De Galna", "De Smarta", "De Vilda", "De Mystiska", "De Tysta", "De Lysande"];
-        const NOUNS = ["Stormarna", "Örnarna", "Tornen", "Vargarna", "Björnarna", "Hajarna", "Lejonen", "Tigrarna", "Falkarna", "Kobrorna"];
-
-        function getTeamName(index) {
-            // Arrays är 0-indexerade, så Lag 1 = index 0.
-            const adjIndex = Math.floor((index - 1) / NOUNS.length) % ADJECTIVES.length;
-            const nounIndex = (index - 1) % NOUNS.length;
-            
-            // Om vi har fler lag än substantiv börjar vi lägga till adjektiv, t.ex. "De Snabba Vargarna"
-            if (index <= NOUNS.length) {
-                return NOUNS[nounIndex];
-            } else {
-                return `${ADJECTIVES[adjIndex]} ${NOUNS[nounIndex]}`;
-            }
+            toast.style.display = 'block'; setTimeout(() => toast.style.display = 'none', 3000);
         }
 
         function renderTeamsGrid() {
             const grid = document.getElementById('teamsGrid');
             grid.innerHTML = '';
             for (let i = 1; i <= window.numberOfTeams; i++) {
-                grid.innerHTML += `
-                    <div class="team-box" ondragover="allowDrop(event)" ondrop="drop(event, ${i})" ondragenter="this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')">
-                        <div class="team-header">${getTeamName(i)}</div>
-                        <div class="team-players" id="team-${i}"></div>
-                    </div>
-                `;
+                grid.innerHTML += `<div class="team-box" ondragover="allowDrop(event)" ondrop="drop(event, ${i})" ondragenter="this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')"><div class="team-header">${window.getTeamName(i)}</div><div class="team-players" id="team-${i}"></div></div>`;
             }
         }
 
         function renderAllPlayers() {
-            const unassignedList = document.getElementById('unassignedList');
-            unassignedList.innerHTML = '';
-            
+            document.getElementById('unassignedList').innerHTML = '';
             for (let i = 1; i <= window.numberOfTeams; i++) {
                 const teamEl = document.getElementById(`team-${i}`);
                 if(teamEl) teamEl.innerHTML = '';
             }
-
             window.players.forEach(p => {
                 const chip = document.createElement('div');
-                chip.className = 'player-chip';
-                chip.draggable = true;
-                chip.id = `player-${p.id}`;
+                chip.className = 'player-chip'; chip.draggable = true; chip.id = `player-${p.id}`;
                 chip.ondragstart = (e) => e.dataTransfer.setData("playerId", p.id);
-                
-                chip.innerHTML = `
-                    <span>${p.name}</span>
-                    <div class="player-actions">
-                        <button class="action-btn" title="Byt namn" onclick="renamePlayer('${p.id}', '${p.name}')">✏️</button>
-                        <button class="action-btn" title="Kicka" onclick="kickPlayer('${p.id}')">❌</button>
-                    </div>
-                `;
-
-                if (p.team === null || p.team === undefined) {
-                    unassignedList.appendChild(chip);
-                } else {
-                    if (p.team > window.numberOfTeams) {
-                        window.numberOfTeams = p.team;
-                        renderTeamsGrid();
-                        renderAllPlayers();
-                        return;
-                    }
+                chip.innerHTML = `<span>${p.name}</span><div class="player-actions"><button class="action-btn" onclick="renamePlayer('${p.id}', '${p.name}')">✏️</button><button class="action-btn" onclick="kickPlayer('${p.id}')">❌</button></div>`;
+                if (p.team === null || p.team === undefined) document.getElementById('unassignedList').appendChild(chip);
+                else {
+                    if (p.team > window.numberOfTeams) { window.numberOfTeams = p.team; renderTeamsGrid(); renderAllPlayers(); return; }
                     document.getElementById(`team-${p.team}`).appendChild(chip);
                 }
             });
         }
 
-        function addEmptyTeam() {
-            window.numberOfTeams++;
-            renderTeamsGrid();
-            renderAllPlayers();
-        }
-
-        // --- DRAG AND DROP ---
+        function addEmptyTeam() { window.numberOfTeams++; renderTeamsGrid(); renderAllPlayers(); }
         function allowDrop(ev) { ev.preventDefault(); }
-        
         async function drop(ev, teamId) {
-            ev.preventDefault();
-            document.querySelectorAll('.team-box').forEach(el => el.classList.remove('drag-over'));
-            
+            ev.preventDefault(); document.querySelectorAll('.team-box').forEach(el => el.classList.remove('drag-over'));
             const playerId = ev.dataTransfer.getData("playerId");
-            import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, updateDoc }) => {
-                const pRef = doc(window.db, "rooms", window.roomId, "players", playerId);
-                await updateDoc(pRef, { team: teamId });
-            });
+            import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, updateDoc }) => { await updateDoc(doc(window.db, "rooms", window.roomId, "players", playerId), { team: teamId }); });
         }
-
-        // --- ELEV-HANTERING ---
         async function renamePlayer(id, oldName) {
-            // Använder native prompt här eftersom det blockerar och är enklast för text-input. 
-            // Alert/Confirm byts dock mot Toast.
             const newName = prompt("Nytt namn för eleven:", oldName);
             if (newName && newName.trim() !== oldName) {
-                import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, updateDoc }) => {
-                    await updateDoc(doc(window.db, "rooms", window.roomId, "players", id), { name: newName.trim() });
-                    showToast(`Namnet ändrades till ${newName.trim()}`, "success");
-                });
+                import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, updateDoc }) => { await updateDoc(doc(window.db, "rooms", window.roomId, "players", id), { name: newName.trim() }); });
             }
         }
-
         async function kickPlayer(id) {
-            if (confirm("Är du säker på att du vill kicka eleven? De måste skriva in sitt namn igen.")) {
-                import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, deleteDoc }) => {
-                    await deleteDoc(doc(window.db, "rooms", window.roomId, "players", id));
-                    showToast("Eleven kickades.", "success");
-                });
+            if (confirm("Är du säker på att du vill kicka eleven?")) {
+                import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, deleteDoc }) => { await deleteDoc(doc(window.db, "rooms", window.roomId, "players", id)); });
             }
         }
-
         async function randomizeTeams(teamSize) {
-            if (window.players.length === 0) {
-                showToast("Det finns inga elever att slumpa än!", "error");
-                return;
-            }
-
+            if (window.players.length === 0) return showToast("Inga elever att slumpa!", "error");
             let shuffled = [...window.players];
-            for (let i = shuffled.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-            }
-
+            for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
             import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, writeBatch }) => {
                 const batch = writeBatch(window.db);
-                
-                shuffled.forEach((player, index) => {
-                    const teamNum = Math.floor(index / teamSize) + 1;
-                    const pRef = doc(window.db, "rooms", window.roomId, "players", player.id);
-                    batch.update(pRef, { team: teamNum });
-                });
-
-                await batch.commit();
-                showToast("Lagen har slumpats!", "success");
+                shuffled.forEach((player, index) => { const teamNum = Math.floor(index / teamSize) + 1; batch.update(doc(window.db, "rooms", window.roomId, "players", player.id), { team: teamNum }); });
+                await batch.commit(); showToast("Lagen har slumpats!", "success");
             });
         }
-
         function checkReadyToStart() {
             const startBtn = document.getElementById('startBtn');
             const unassignedCount = window.players.filter(p => p.team === null || p.team === undefined).length;
-            const totalPlayers = window.players.length;
-
-            if (totalPlayers > 0 && unassignedCount === 0) {
-                startBtn.disabled = false;
-                startBtn.innerText = "▶️ Starta Spelet (" + totalPlayers + " elever redo)";
-            } else {
-                startBtn.disabled = true;
-                startBtn.innerText = "▶️ Starta Spelet (Väntar på lagindelning)";
-            }
+            if (window.players.length > 0 && unassignedCount === 0) { startBtn.disabled = false; startBtn.innerText = `▶️ Starta Spelet (${window.players.length} redo)`; } 
+            else { startBtn.disabled = true; startBtn.innerText = "▶️ Starta Spelet (Väntar på indelning)"; }
         }
-
-        function copyJoinLink() {
-            const origin = window.location.origin + window.location.pathname.replace('host.html', 'play.html');
-            const link = `${origin}?room=${window.roomId}`;
-            navigator.clipboard.writeText(link).then(() => showToast("Länk kopierad till urklipp!", "success"));
-        }
-
-        function startGame() {
-            showToast("Spelet laddas...", "success");
-            // alert() borttagen. Implementering av byte till 'playing' status kommer härnäst.
-        }
+        function copyJoinLink() { navigator.clipboard.writeText(window.location.origin + window.location.pathname.replace('host.html', 'play.html') + `?room=${window.roomId}`).then(() => showToast("Länk kopierad!", "success")); }
     </script>
 </body>
 </html>
