@@ -167,18 +167,21 @@
 
     <script>
         // --- RENDERING ---
-        function renderTeamsGrid() {
-            const grid = document.getElementById('teamsGrid');
-            grid.innerHTML = '';
-            for (let i = 1; i <= window.numberOfTeams; i++) {
-                grid.innerHTML += `
-                    <div class="team-box" ondragover="allowDrop(event)" ondrop="drop(event, ${i})" ondragenter="this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')">
-                        <div class="team-header">Lag ${i}</div>
-                        <div class="team-players" id="team-${i}"></div>
-                    </div>
-                `;
-            }
-        }
+        const TEAM_NAMES = ["Stormen", "Örnen", "Tornet", "Vargarna", "Björnarna", "Hajarna", "Lejonen", "Tigrarna", "Falkarna", "Kobrorna"];
+
+function renderTeamsGrid() {
+    const grid = document.getElementById('teamsGrid');
+    grid.innerHTML = '';
+    for (let i = 1; i <= window.numberOfTeams; i++) {
+        const teamName = TEAM_NAMES[(i - 1) % TEAM_NAMES.length];
+        grid.innerHTML += `
+            <div class="team-box" ondragover="allowDrop(event)" ondrop="drop(event, ${i})" ondragenter="this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')">
+                <div class="team-header">${teamName}</div>
+                <div class="team-players" id="team-${i}"></div>
+            </div>
+        `;
+    }
+}
 
         function renderAllPlayers() {
             const unassignedList = document.getElementById('unassignedList');
