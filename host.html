@@ -150,8 +150,7 @@
             </div>
             <button class="btn-danger" onclick="tryEndGame()">Avsluta Spelet Nu</button>
         </div>
-        <div class="leaderboard-container" id="leaderboardGrid">
-            </div>
+        <div class="leaderboard-container" id="leaderboardGrid"></div>
     </div>
 
     <div id="podiumScreen">
@@ -160,6 +159,21 @@
         <div class="podium-container" id="podiumContainer"></div>
         <button class="btn-primary" style="margin-top: 50px; font-size: 1.2rem; padding: 15px 30px;" onclick="window.location.href='index.html'">Tillbaka till Start</button>
     </div>
+
+    <script>
+        // --- ANTI-CHEAT HASHING ---
+        // Samma funktion måste finnas i play.html
+        function hashAnswer(str) {
+            let hash = 0; 
+            let s = str.toString().trim().toLowerCase();
+            for (let i = 0; i < s.length; i++) {
+                let char = s.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Konvertera till 32bit integer
+            }
+            return hash.toString();
+        }
+    </script>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
@@ -194,7 +208,9 @@
             const nounIndex = (index - 1) % NOUNS.length;
             return index <= NOUNS.length ? NOUNS[nounIndex] : `${ADJECTIVES[adjIndex]} ${NOUNS[nounIndex]}`;
         }
-        window.getTeamColor = function(index) { return TEAM_COLORS[(index - 1) % TEAM_COLORS.length]; }
+        window.getTeamColor = function(index) { 
+            return TEAM_COLORS[(index - 1) % TEAM_COLORS.length]; 
+        }
 
         async function initHost() {
             if (!window.roomId || !window.localToken) {
@@ -210,44 +226,64 @@
                 const pendingData = JSON.parse(pendingDataStr);
                 if (!pendingData.package) {
                     showToast("Fel: Frågepaketet saknas. Ladda om startsidan (Ctrl+F5).", "error");
-                    localStorage.removeItem('lockAndKey_pendingRoom');
+                    localStorage.removeItem('lockAndKey_pendingRoom'); 
                     return;
                 }
+                
                 if (pendingData.roomCode === window.roomId && pendingData.hostToken === window.localToken) {
-                    await setDoc(doc(window.db, "rooms", window.roomId), { hostToken: window.localToken, status: "lobby", package: pendingData.package, createdAt: Date.now() });
+                    // KRYPTERING AV SVAR: Vi loopar paketet och hashar svaren innan det laddas upp.
+                    const safePackage = JSON.parse(JSON.stringify(pendingData.package));
+                    safePackage.questions.forEach(q => {
+                        q.answer = hashAnswer(q.answer);
+                    });
+
+                    // Databas-upload med new Date()
+                    await setDoc(doc(window.db, "rooms", window.roomId), { 
+                        hostToken: window.localToken, 
+                        status: "lobby", 
+                        package: safePackage, 
+                        createdAt: new Date() 
+                    });
                     localStorage.removeItem('lockAndKey_pendingRoom');
                 }
             }
 
             renderTeamsGrid();
 
-            // Lyssna på elever (Lobby)
+            // Lyssna på elever i realtid
             onSnapshot(collection(window.db, "rooms", window.roomId, "players"), (snapshot) => {
-                window.players = [];
+                window.players = []; 
                 snapshot.forEach(doc => window.players.push({ id: doc.id, ...doc.data() }));
-                if(document.getElementById('lobbyScreen').style.display !== 'none') {
-                    renderAllPlayers(); checkReadyToStart();
+                
+                if(document.getElementById('lobbyScreen').style.display !== 'none') { 
+                    renderAllPlayers(); 
+                    checkReadyToStart(); 
                 }
             });
 
-            // Lyssna på rummet (Spelet)
+            // Lyssna på rummets status (spelläge)
             onSnapshot(doc(window.db, "rooms", window.roomId), (docSnap) => {
                 if(docSnap.exists()) {
                     window.roomData = docSnap.data();
                     if(window.roomData.status === 'playing') {
-                        document.getElementById('lobbyScreen').style.display = 'none';
+                        document.getElementById('lobbyScreen').style.display = 'none'; 
                         document.getElementById('headerActions').style.display = 'none';
-                        document.getElementById('gameScreen').style.display = 'flex';
+                        document.getElementById('gameScreen').style.display = 'flex'; 
                         document.getElementById('roomStatusText').innerText = "Spelet är igång!";
+                        
                         renderLeaderboard();
-                        if(!window.gameTimerInterval && window.roomData.timerEndsAt) startLocalTimer();
+                        
+                        if(!window.gameTimerInterval && window.roomData.timerEndsAt) {
+                            startLocalTimer();
+                        }
                     } else if (window.roomData.status === 'finished') {
-                        document.getElementById('lobbyScreen').style.display = 'none';
+                        document.getElementById('lobbyScreen').style.display = 'none'; 
                         document.getElementById('gameScreen').style.display = 'none';
-                        document.getElementById('headerActions').style.display = 'none';
+                        document.getElementById('headerActions').style.display = 'none'; 
                         document.getElementById('podiumScreen').style.display = 'flex';
-                        document.getElementById('roomStatusText').innerText = "Spelet är avslutat!";
-                        clearInterval(window.gameTimerInterval);
+                        document.getElementById('roomStatusText').innerText = "Spelet är avslutat!"; 
+                        
+                        clearInterval(window.gameTimerInterval); 
                         renderPodium();
                     }
                 }
@@ -255,52 +291,65 @@
         }
 
         window.executeStartGame = async function() {
-            const activeTeams = new Set();
+            const activeTeams = new Set(); 
             window.players.forEach(p => { if(p.team) activeTeams.add(p.team); });
-
-            const initialTeamData = {};
-            activeTeams.forEach(teamId => { initialTeamData[teamId] = { score: 0, currentQuestionIndex: 0, wrongGuesses: 0, lastPenalty: 0 }; });
-
-            await updateDoc(doc(window.db, "rooms", window.roomId), { status: "playing", teamData: initialTeamData, timerEndsAt: Date.now() + 10 * 60 * 1000 });
+            
+            const initialTeamData = {}; 
+            activeTeams.forEach(teamId => { 
+                initialTeamData[teamId] = { score: 0, currentQuestionIndex: 0, wrongGuesses: 0, lastPenalty: 0 }; 
+            });
+            
+            await updateDoc(doc(window.db, "rooms", window.roomId), { 
+                status: "playing", 
+                teamData: initialTeamData, 
+                timerEndsAt: Date.now() + 10 * 60 * 1000 
+            });
         }
 
         window.adjustTimer = async function(seconds) {
             if(!window.roomData || !window.roomData.timerEndsAt) return;
-            await updateDoc(doc(window.db, "rooms", window.roomId), { timerEndsAt: window.roomData.timerEndsAt + (seconds * 1000) });
+            await updateDoc(doc(window.db, "rooms", window.roomId), { 
+                timerEndsAt: window.roomData.timerEndsAt + (seconds * 1000) 
+            });
         }
 
         function startLocalTimer() {
             window.gameTimerInterval = setInterval(() => {
                 const diff = window.roomData.timerEndsAt - Date.now();
-                if (diff <= 0) {
-                    clearInterval(window.gameTimerInterval); document.getElementById('timerText').innerText = "00:00";
-                    window.executeEndGame(); return;
+                if (diff <= 0) { 
+                    clearInterval(window.gameTimerInterval); 
+                    document.getElementById('timerText').innerText = "00:00"; 
+                    window.executeEndGame(); 
+                    return; 
                 }
-                const m = Math.floor(diff / 60000); const s = Math.floor((diff % 60000) / 1000);
+                const m = Math.floor(diff / 60000); 
+                const s = Math.floor((diff % 60000) / 1000);
                 document.getElementById('timerText').innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
                 document.getElementById('timerText').style.color = diff < 60000 ? "var(--danger)" : "var(--text-main)";
             }, 500);
         }
 
-        // --- ANIMERAD LEADERBOARD ---
         function renderLeaderboard() {
             const lbGrid = document.getElementById('leaderboardGrid');
             if(!window.roomData || !window.roomData.teamData) return;
 
             const teamsArray = Object.keys(window.roomData.teamData).map(tId => ({
-                id: parseInt(tId), name: window.getTeamName(parseInt(tId)), color: window.getTeamColor(parseInt(tId)), ...window.roomData.teamData[tId]
+                id: parseInt(tId), 
+                name: window.getTeamName(parseInt(tId)), 
+                color: window.getTeamColor(parseInt(tId)), 
+                ...window.roomData.teamData[tId]
             })).sort((a, b) => b.score - a.score);
 
-            // Container höjd (90px card + 15px gap = 105px per kort)
+            // Dynamisk höjd för att animeringen (absolute positioning) ska få plats
             lbGrid.style.height = (teamsArray.length * 105) + 'px';
 
             teamsArray.forEach((t, index) => {
                 let card = document.getElementById(`lb-card-${t.id}`);
                 if (!card) {
-                    card = document.createElement('div');
-                    card.id = `lb-card-${t.id}`;
-                    card.className = 'lb-card';
-                    card.style.borderLeft = `8px solid ${t.color}`; // Pastellfärgen!
+                    card = document.createElement('div'); 
+                    card.id = `lb-card-${t.id}`; 
+                    card.className = 'lb-card'; 
+                    card.style.borderLeft = `8px solid ${t.color}`; 
                     lbGrid.appendChild(card);
                 }
                 
@@ -312,29 +361,43 @@
                     </div>
                     <div class="lb-score">${t.score}p</div>
                 `;
-
-                // Animera positionen i Y-led!
+                
+                // Mjuk transformering av positionen (Rankingen)
                 card.style.transform = `translateY(${index * 105}px)`;
                 
-                // Guld-ram för ledaren
-                if(index === 0 && t.score > 0) card.style.boxShadow = "0 0 15px rgba(255, 215, 0, 0.6), inset 0 0 0 2px gold";
-                else card.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
+                // Guld-ram för ledaren (om de har mer än 0 poäng)
+                if(index === 0 && t.score > 0) {
+                    card.style.boxShadow = "0 0 15px rgba(255, 215, 0, 0.6), inset 0 0 0 2px gold"; 
+                } else {
+                    card.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
+                }
             });
         }
 
         window.givePenalty = async function(teamId) {
             if(!window.roomData.teamData[teamId]) return;
             const newScore = Math.max(0, window.roomData.teamData[teamId].score - 50);
-            await updateDoc(doc(window.db, "rooms", window.roomId), { [`teamData.${teamId}.score`]: newScore, [`teamData.${teamId}.lastPenalty`]: Date.now() });
+            await updateDoc(doc(window.db, "rooms", window.roomId), { 
+                [`teamData.${teamId}.score`]: newScore, 
+                [`teamData.${teamId}.lastPenalty`]: Date.now() 
+            });
             showToast("Straffpoäng utdelad!", "success");
         }
 
-        window.executeEndGame = async function() { await updateDoc(doc(window.db, "rooms", window.roomId), { status: "finished" }); }
+        window.executeEndGame = async function() { 
+            await updateDoc(doc(window.db, "rooms", window.roomId), { status: "finished" }); 
+        }
 
         function renderPodium() {
             const container = document.getElementById('podiumContainer');
             if(!window.roomData || !window.roomData.teamData) return;
-            const teams = Object.keys(window.roomData.teamData).map(tId => ({ name: window.getTeamName(parseInt(tId)), color: window.getTeamColor(parseInt(tId)), score: window.roomData.teamData[tId].score })).sort((a, b) => b.score - a.score);
+            
+            const teams = Object.keys(window.roomData.teamData).map(tId => ({ 
+                name: window.getTeamName(parseInt(tId)), 
+                color: window.getTeamColor(parseInt(tId)), 
+                score: window.roomData.teamData[tId].score 
+            })).sort((a, b) => b.score - a.score);
+            
             if (teams.length === 0) return;
             
             const getStep = (t, cl, h, bg, emoji) => t ? `<div class="podium-place ${cl}"><div class="podium-name" style="border-bottom: 4px solid ${t.color}">${emoji} ${t.name}</div><div class="step" style="height:${h}; background:${bg};"><div class="podium-score">${t.score}p</div></div></div>` : '';
@@ -350,120 +413,180 @@
         const modalTitle = document.getElementById('modalTitle');
         const modalText = document.getElementById('modalText');
         const modalInput = document.getElementById('modalInput');
-        const cancelBtn = document.getElementById('modalCancelBtn');
-        const confirmBtn = document.getElementById('modalConfirmBtn');
-
+        
         function showCustomModal(options) {
-            modalTitle.innerText = options.title;
+            modalTitle.innerText = options.title; 
             modalText.innerText = options.text;
             
-            if (options.type === 'prompt') {
-                modalInput.style.display = 'block';
-                modalInput.value = options.defaultVal || '';
-                setTimeout(() => modalInput.focus(), 100);
-            } else {
-                modalInput.style.display = 'none';
+            if (options.type === 'prompt') { 
+                modalInput.style.display = 'block'; 
+                modalInput.value = options.defaultVal || ''; 
+                setTimeout(() => modalInput.focus(), 100); 
+            } else { 
+                modalInput.style.display = 'none'; 
             }
-
-            cancelBtn.onclick = () => { modalOverlay.style.display = 'none'; if(options.onCancel) options.onCancel(); };
-            confirmBtn.onclick = () => { 
+            
+            document.getElementById('modalCancelBtn').onclick = () => { 
+                modalOverlay.style.display = 'none'; 
+                if(options.onCancel) options.onCancel(); 
+            };
+            document.getElementById('modalConfirmBtn').onclick = () => { 
                 modalOverlay.style.display = 'none'; 
                 options.onConfirm(options.type === 'prompt' ? modalInput.value : null); 
             };
+            
             modalOverlay.style.display = 'flex';
         }
 
-        function showToast(msg, type = "normal") {
-            const toast = document.getElementById('toastMessage');
-            toast.innerText = msg; toast.className = 'toast';
-            if(type === 'error') toast.classList.add('error');
-            if(type === 'success') toast.classList.add('success');
-            toast.style.display = 'block'; setTimeout(() => toast.style.display = 'none', 3000);
+        function showToast(msg, type = "normal") { 
+            const toast = document.getElementById('toastMessage'); 
+            toast.innerText = msg; 
+            toast.className = 'toast'; 
+            if(type === 'error') toast.classList.add('error'); 
+            if(type === 'success') toast.classList.add('success'); 
+            toast.style.display = 'block'; 
+            setTimeout(() => toast.style.display = 'none', 3000); 
         }
 
         function renderTeamsGrid() {
-            const grid = document.getElementById('teamsGrid');
+            const grid = document.getElementById('teamsGrid'); 
             grid.innerHTML = '';
-            for (let i = 1; i <= window.numberOfTeams; i++) {
-                grid.innerHTML += `<div class="team-box" ondragover="allowDrop(event)" ondrop="drop(event, ${i})" ondragenter="this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')"><div class="team-header" style="background-color: ${window.getTeamColor(i)}">${window.getTeamName(i)}</div><div class="team-players" id="team-${i}"></div></div>`;
+            for (let i = 1; i <= window.numberOfTeams; i++) { 
+                grid.innerHTML += `
+                    <div class="team-box" ondragover="allowDrop(event)" ondrop="drop(event, ${i})" ondragenter="this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')">
+                        <div class="team-header" style="background-color: ${window.getTeamColor(i)}">${window.getTeamName(i)}</div>
+                        <div class="team-players" id="team-${i}"></div>
+                    </div>`; 
             }
         }
 
         function renderAllPlayers() {
             document.getElementById('unassignedList').innerHTML = '';
-            for (let i = 1; i <= window.numberOfTeams; i++) { const t = document.getElementById(`team-${i}`); if(t) t.innerHTML = ''; }
+            for (let i = 1; i <= window.numberOfTeams; i++) { 
+                const t = document.getElementById(`team-${i}`); 
+                if(t) t.innerHTML = ''; 
+            }
             window.players.forEach(p => {
-                const chip = document.createElement('div');
-                chip.className = 'player-chip'; chip.draggable = true; chip.id = `player-${p.id}`;
+                const chip = document.createElement('div'); 
+                chip.className = 'player-chip'; 
+                chip.draggable = true; 
+                chip.id = `player-${p.id}`; 
                 chip.ondragstart = (e) => e.dataTransfer.setData("playerId", p.id);
-                chip.innerHTML = `<span>${p.name}</span><div class="player-actions"><button class="action-btn" onclick="renamePlayer('${p.id}', '${p.name}')">✏️</button><button class="action-btn" onclick="kickPlayer('${p.id}')">❌</button></div>`;
-                if (p.team == null) document.getElementById('unassignedList').appendChild(chip);
-                else {
-                    if (p.team > window.numberOfTeams) { window.numberOfTeams = p.team; renderTeamsGrid(); renderAllPlayers(); return; }
-                    document.getElementById(`team-${p.team}`).appendChild(chip);
+                chip.innerHTML = `
+                    <span>${p.name}</span>
+                    <div class="player-actions">
+                        <button class="action-btn" onclick="renamePlayer('${p.id}', '${p.name}')">✏️</button>
+                        <button class="action-btn" onclick="kickPlayer('${p.id}')">❌</button>
+                    </div>`;
+                    
+                if (p.team == null) {
+                    document.getElementById('unassignedList').appendChild(chip); 
+                } else { 
+                    if (p.team > window.numberOfTeams) { 
+                        window.numberOfTeams = p.team; 
+                        renderTeamsGrid(); 
+                        renderAllPlayers(); 
+                        return; 
+                    } 
+                    document.getElementById(`team-${p.team}`).appendChild(chip); 
                 }
             });
         }
 
         function addEmptyTeam() { window.numberOfTeams++; renderTeamsGrid(); renderAllPlayers(); }
         function allowDrop(ev) { ev.preventDefault(); }
-        async function drop(ev, teamId) {
-            ev.preventDefault(); document.querySelectorAll('.team-box').forEach(el => el.classList.remove('drag-over'));
-            const pId = ev.dataTransfer.getData("playerId");
-            import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, updateDoc }) => { await updateDoc(doc(window.db, "rooms", window.roomId, "players", pId), { team: teamId }); });
-        }
         
-        // Custom Modals istället för prompt/confirm
-        function renamePlayer(id, oldName) {
-            showCustomModal({
-                title: 'Byt namn', text: 'Ange ett nytt namn för eleven:', type: 'prompt', defaultVal: oldName,
-                onConfirm: (newName) => {
-                    if (newName && newName.trim() !== oldName) {
-                        import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, updateDoc }) => {
-                            await updateDoc(doc(window.db, "rooms", window.roomId, "players", id), { name: newName.trim() });
-                            showToast("Namnet ändrades", "success");
-                        });
-                    }
-                }
-            });
+        async function drop(ev, teamId) { 
+            ev.preventDefault(); 
+            document.querySelectorAll('.team-box').forEach(el => el.classList.remove('drag-over')); 
+            const pId = ev.dataTransfer.getData("playerId"); 
+            import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, updateDoc }) => { 
+                await updateDoc(doc(window.db, "rooms", window.roomId, "players", pId), { team: teamId }); 
+            }); 
         }
-        function kickPlayer(id) {
-            showCustomModal({
-                title: 'Kicka elev', text: 'Är du säker på att du vill ta bort eleven? De kan logga in igen med koden.', type: 'confirm',
-                onConfirm: () => {
-                    import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, deleteDoc }) => {
-                        await deleteDoc(doc(window.db, "rooms", window.roomId, "players", id)); showToast("Eleven togs bort", "success");
-                    });
-                }
-            });
+
+        function renamePlayer(id, oldName) { 
+            showCustomModal({ 
+                title: 'Byt namn', 
+                text: 'Ange ett nytt namn för eleven:', 
+                type: 'prompt', 
+                defaultVal: oldName, 
+                onConfirm: (newName) => { 
+                    if (newName && newName.trim() !== oldName) { 
+                        import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, updateDoc }) => { 
+                            await updateDoc(doc(window.db, "rooms", window.roomId, "players", id), { name: newName.trim() }); 
+                            showToast("Namnet ändrades", "success"); 
+                        }); 
+                    } 
+                } 
+            }); 
         }
-        function tryStartGame() {
-            showCustomModal({
-                title: 'Starta spelet?', text: 'Elever som inte är i ett lag kommer raderas från lobbyn. Är alla redo?', type: 'confirm',
-                onConfirm: () => window.executeStartGame()
-            });
+
+        function kickPlayer(id) { 
+            showCustomModal({ 
+                title: 'Kicka elev', 
+                text: 'Är du säker på att du vill ta bort eleven?', 
+                type: 'confirm', 
+                onConfirm: () => { 
+                    import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, deleteDoc }) => { 
+                        await deleteDoc(doc(window.db, "rooms", window.roomId, "players", id)); 
+                        showToast("Eleven togs bort", "success"); 
+                    }); 
+                } 
+            }); 
         }
-        function tryEndGame() {
-            showCustomModal({ title: 'Avsluta', text: 'Är du säker på att du vill avsluta spelet för alla och visa podiet?', type: 'confirm', onConfirm: () => window.executeEndGame() });
+
+        function tryStartGame() { 
+            showCustomModal({ 
+                title: 'Starta spelet?', 
+                text: 'Elever som inte är i ett lag kommer raderas. Är alla redo?', 
+                type: 'confirm', 
+                onConfirm: () => window.executeStartGame() 
+            }); 
+        }
+
+        function tryEndGame() { 
+            showCustomModal({ 
+                title: 'Avsluta', 
+                text: 'Är du säker på att du vill avsluta spelet och visa podiet?', 
+                type: 'confirm', 
+                onConfirm: () => window.executeEndGame() 
+            }); 
         }
 
         async function randomizeTeams(teamSize) {
-            if (window.players.length === 0) return showToast("Inga elever att slumpa!", "error");
-            let shuffled = [...window.players];
-            for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
-            import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, writeBatch }) => {
-                const batch = writeBatch(window.db);
-                shuffled.forEach((player, index) => { const teamNum = Math.floor(index / teamSize) + 1; batch.update(doc(window.db, "rooms", window.roomId, "players", player.id), { team: teamNum }); });
-                await batch.commit(); showToast("Lagen har slumpats!", "success");
+            if (window.players.length === 0) return showToast("Inga elever att slumpa!", "error"); 
+            let shuffled = [...window.players]; 
+            for (let i = shuffled.length - 1; i > 0; i--) { 
+                const j = Math.floor(Math.random() * (i + 1)); 
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; 
+            }
+            import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, writeBatch }) => { 
+                const batch = writeBatch(window.db); 
+                shuffled.forEach((player, index) => { 
+                    const teamNum = Math.floor(index / teamSize) + 1; 
+                    batch.update(doc(window.db, "rooms", window.roomId, "players", player.id), { team: teamNum }); 
+                }); 
+                await batch.commit(); 
+                showToast("Lagen har slumpats!", "success"); 
             });
         }
-        function checkReadyToStart() {
-            const startBtn = document.getElementById('startBtn');
-            const unassignedCount = window.players.filter(p => p.team == null).length;
-            if (window.players.length > 0 && unassignedCount === 0) { startBtn.disabled = false; startBtn.innerText = `▶️ Starta Spelet (${window.players.length} redo)`; } 
-            else { startBtn.disabled = true; startBtn.innerText = "▶️ Starta Spelet (Väntar på indelning)"; }
+
+        function checkReadyToStart() { 
+            const startBtn = document.getElementById('startBtn'); 
+            const unassignedCount = window.players.filter(p => p.team == null).length; 
+            if (window.players.length > 0 && unassignedCount === 0) { 
+                startBtn.disabled = false; 
+                startBtn.innerText = `▶️ Starta Spelet (${window.players.length} redo)`; 
+            } else { 
+                startBtn.disabled = true; 
+                startBtn.innerText = "▶️ Starta Spelet (Väntar på indelning)"; 
+            } 
         }
-        function copyJoinLink() { navigator.clipboard.writeText(window.location.origin + window.location.pathname.replace('host.html', 'play.html') + `?room=${window.roomId}`).then(() => showToast("Länk kopierad!", "success")); }
+
+        function copyJoinLink() { 
+            navigator.clipboard.writeText(window.location.origin + window.location.pathname.replace('host.html', 'play.html') + `?room=${window.roomId}`).then(() => showToast("Länk kopierad!", "success")); 
+        }
     </script>
 </body>
 </html>
