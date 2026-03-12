@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lock and Key - Lärarpanel</title>
+    <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --panel-bg: #ffffff;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success: #16a34a;
+            --success-hover: #15803d;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --warning: #f59e0b;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #cbd5e1;
+            --border-radius: 6px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+        body {
+            background-color: var(--bg-color); color: var(--text-main);
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden; 
+        }
+
+        header {
+            background-color: var(--primary); color: white; padding: 10px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10;
+        }
+
+        header h1 { font-size: 1.5rem; letter-spacing: 1px; }
+
+        .main-container { display: flex; flex: 1; overflow: hidden; padding: 15px; gap: 15px; }
+
+        /* Vänster panel - Dashboard */
+        .dashboard-panel {
+            flex: 0 0 40%; background: var(--panel-bg); border-radius: var(--border-radius);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; flex-direction: column; border: 1px solid var(--border);
+        }
+
+        .panel-header {
+            padding: 12px 15px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center; background: #f8fafc;
+        }
+
+        .package-list { flex: 1; overflow-y: auto; padding: 10px; }
+
+        .package-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 12px; border: 1px solid var(--border);
+            border-radius: var(--border-radius); margin-bottom: 8px; background: #fff;
+        }
+        .package-item:hover { background: #f1f5f9; }
+        .package-name { font-weight: 600; font-size: 0.95rem; }
+        .package-meta { font-size: 0.8rem; color: var(--text-muted); }
+        .btn-group { display: flex; gap: 4px; }
+
+        /* Höger panel - Editor */
+        .editor-panel {
+            flex: 1; background: var(--panel-bg); border-radius: var(--border-radius);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; flex-direction: column; border: 1px solid var(--border);
+        }
+
+        .editor-content { flex: 1; overflow-y: auto; padding: 15px; }
+        .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); }
+
+        /* Formulär och Input */
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 3px; color: var(--text-muted); }
+        input[type="text"], textarea.clue-input {
+            width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.9rem; outline: none;
+        }
+        input[type="text"]:focus, textarea.clue-input:focus { border-color: var(--primary); }
+        textarea.clue-input { resize: none; overflow: hidden; min-height: 34px; line-height: 1.4; }
+
+        /* Fråge-kort */
+        .question-card {
+            border: 1px solid var(--border); background: #f8fafc; border-radius: var(--border-radius); 
+            padding: 10px; margin-bottom: 10px; position: relative;
+        }
+        .question-header { display: flex; gap: 10px; margin-bottom: 8px; }
+        .question-header .form-group { flex: 1; margin-bottom: 0; }
+        .clues-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-bottom: 8px; align-items: start; }
+        .clue-input-wrapper { display: flex; align-items: flex-start; gap: 4px; }
+        .clue-number { font-size: 0.75rem; color: var(--text-muted); width: 15px; padding-top: 8px; }
+
+        /* Avancerat läge */
+        .advanced-section {
+            margin-top: 30px; border: 2px dashed var(--warning); border-radius: var(--border-radius); padding: 15px; background: #fffbeb;
+        }
+        .advanced-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .advanced-header h3 { color: #b45309; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+        .code-editor {
+            width: 100%; height: 200px; font-family: 'Courier New', Courier, monospace; font-size: 0.9rem;
+            padding: 10px; border: 1px solid #d97706; border-radius: 4px; background: #1e293b; color: #f8fafc; resize: vertical;
+        }
+        .preview-box {
+            margin-top: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 4px; background: #fff; font-size: 0.9rem;
+        }
+
+        /* Knappar */
+        button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: background 0.2s; color: white; }
+        .btn-primary { background-color: var(--primary); }
+        .btn-primary:hover { background-color: var(--primary-hover); }
+        .btn-success { background-color: var(--success); }
+        .btn-success:hover { background-color: var(--success-hover); }
+        .btn-danger { background-color: var(--danger); }
+        .btn-danger:hover { background-color: var(--danger-hover); }
+        .btn-warning { background-color: var(--warning); color: #fff; }
+        .btn-outline { background-color: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-outline:hover { background-color: #e2e8f0; }
+        .btn-sm { padding: 4px 8px; font-size: 0.75rem; }
+        .remove-q-btn { position: absolute; top: 10px; right: 10px; }
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 500px; max-width: 90%; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .modal-content textarea { width: 100%; height: 250px; margin: 15px 0; padding: 10px; font-family: monospace; border: 1px solid var(--border); border-radius: 4px; resize: vertical; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Lock and Key 🗝️</h1>
+        <div>
+            <button class="btn-outline" style="color: white; border-color: white;" onclick="openImportModal()">Importera Bräde (JSON)</button>
+            <button class="btn-success" onclick="createNewPackage()">Skapa Nytt Bräde</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <aside class="dashboard-panel">
+            <div class="panel-header"><h2>Dina sparade bräden</h2></div>
+            <div class="package-list" id="packageList"></div>
+        </aside>
+
+        <main class="editor-panel">
+            <div class="panel-header">
+                <h2 id="editorTitle">Redigerare</h2>
+                <button class="btn-success" id="saveBtn" style="display: none;" onclick="saveCurrentPackage()">💾 Spara Paket</button>
+            </div>
+            <div class="editor-content" id="editorContent">
+                <div class="empty-state">
+                    <h3>Inget bräde valt</h3>
+                    <p>Skapa ett nytt bräde eller välj ett från listan.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal-overlay" id="importModal">
+        <div class="modal-content">
+            <h3 style="margin-bottom: 5px;">Importera JSON</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">Klistra in koden från AI:n här.</p>
+            <textarea id="importJsonText" placeholder='{"title": "Exempel", "questions": [...]}'></textarea>
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button class="btn-outline" onclick="closeImportModal()">Avbryt</button>
+                <button class="btn-success" onclick="processImport()">Importera</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DEFAULT_GENERATOR_CODE = `// Skriv din algoritm här. Du MÅSTE returnera ett objekt med:
+// { question: string, answer: string, clues: array }
+
+const x = Math.floor(Math.random() * 50) + 10;
+const y = Math.floor(Math.random() * 50) + 10;
+const summa = x + y;
+
+return {
+  question: "Vad är x + y?",
+  answer: summa.toString(),
+  clues: [
+    "x är " + x,
+    "y är " + y,
+    "Svaret är mer än " + (summa - 5)
+  ]
+};`;
+
+        let packages = JSON.parse(localStorage.getItem('lockAndKeyPackages')) || [];
+        let currentPackage = null;
+
+        function init() { renderDashboard(); }
+
+        function renderDashboard() {
+            const list = document.getElementById('packageList');
+            list.innerHTML = '';
+            if (packages.length === 0) {
+                list.innerHTML = '<p style="color: #64748b; text-align: center; margin-top: 20px;">Inga sparade bräden. Skapa ett nytt!</p>';
+                return;
+            }
+            packages.forEach((pkg, index) => {
+                const item = document.createElement('div');
+                item.className = 'package-item';
+                const loopBadge = pkg.isAdvanced ? '<span title="Oändlighetsloop aktiverad" style="font-size: 0.8rem; margin-left: 5px;">♾️</span>' : '';
+                item.innerHTML = `
+                    <div>
+                        <div class="package-name">${pkg.title || 'Namnlöst bräde'} ${loopBadge}</div>
+                        <div class="package-meta">${pkg.questions.length} fasta frågor</div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-primary btn-sm" onclick="playPackagePlaceholder()">Spela</button>
+                        <button class="btn-primary btn-sm" onclick="editPackage(${index})">Redigera</button>
+                        <button class="btn-outline btn-sm" onclick="exportPackage(${index})">Exportera</button>
+                        <button class="btn-danger btn-sm" onclick="deletePackage(${index})">Ta bort</button>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function createNewPackage() {
+            currentPackage = { id: Date.now(), title: '', questions: [createEmptyQuestion()], isAdvanced: false, generatorCode: DEFAULT_GENERATOR_CODE };
+            renderEditor();
+        }
+
+        function editPackage(index) {
+            currentPackage = JSON.parse(JSON.stringify(packages[index]));
+            // Se till att äldre paket får de nya egenskaperna
+            if(currentPackage.isAdvanced === undefined) currentPackage.isAdvanced = false;
+            if(!currentPackage.generatorCode) currentPackage.generatorCode = DEFAULT_GENERATOR_CODE;
+            renderEditor();
+        }
+
+        function createEmptyQuestion() { return { question: '', answer: '', clues: ['', '', ''] }; }
+
+        function renderEditor() {
+            const content = document.getElementById('editorContent');
+            const saveBtn = document.getElementById('saveBtn');
+            const titleElement = document.getElementById('editorTitle');
+
+            if (!currentPackage) return;
+
+            saveBtn.style.display = 'block';
+            titleElement.innerText = currentPackage.title ? `Redigerar: ${currentPackage.title}` : 'Skapar nytt bräde';
+
+            let html = `
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label>Namn på frågepaket</label>
+                    <input type="text" id="pkgTitle" value="${currentPackage.title}" placeholder="T.ex. Åk 8: Procent" onchange="updatePackageTitle(this.value)">
+                </div>
+                <div id="questionsContainer"></div>
+                <button class="btn-outline" style="width: 100%; border-style: dashed; padding: 10px; margin-bottom: 20px;" onclick="addQuestion()">+ Lägg till fast fråga</button>
+                
+                <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
+                
+                <div class="advanced-section">
+                    <div class="advanced-header">
+                        <h3>♾️ Avancerat läge: Oändlighetsloop</h3>
+                        <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; font-weight: bold;">
+                            <input type="checkbox" ${currentPackage.isAdvanced ? 'checked' : ''} onchange="toggleAdvanced(this.checked)">
+                            Aktivera algoritmgenerering
+                        </label>
+                    </div>
+                    <p style="font-size: 0.85rem; margin-bottom: 10px; color: #92400e;">
+                        Om aktiverat, körs denna JavaScript-funktion automatiskt för att skapa nya frågor när eleverna löst alla de fasta frågorna ovan.
+                    </p>
+                    <div id="advancedEditorArea" style="display: ${currentPackage.isAdvanced ? 'block' : 'none'};">
+                        <textarea class="code-editor" onchange="updateGeneratorCode(this.value)">${currentPackage.generatorCode}</textarea>
+                        <div style="margin-top: 10px;">
+                            <button class="btn-warning" onclick="testGenerator()">⚙️ Testkör koden</button>
+                        </div>
+                        <div id="generatorPreview" class="preview-box">
+                            <em>Klicka på Testkör för att se resultatet av din kod.</em>
+                        </div>
+                    </div>
+                </div>
+            `;
+            content.innerHTML = html;
+            renderQuestions();
+        }
+
+        // Fasta frågor logik
+        function renderQuestions() {
+            const container = document.getElementById('questionsContainer');
+            container.innerHTML = '';
+            currentPackage.questions.forEach((q, qIndex) => {
+                const qCard = document.createElement('div');
+                qCard.className = 'question-card';
+                let cluesHtml = q.clues.map((clue, cIndex) => `
+                    <div class="clue-input-wrapper">
+                        <span class="clue-number">${cIndex + 1}.</span>
+                        <textarea class="clue-input" placeholder="Ledtråd ${cIndex + 1}" rows="1"
+                            oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'" 
+                            onchange="updateClue(${qIndex}, ${cIndex}, this.value)">${clue}</textarea>
+                    </div>
+                `).join('');
+
+                qCard.innerHTML = `
+                    <button class="btn-danger btn-sm remove-q-btn" onclick="removeQuestion(${qIndex})">X</button>
+                    <div class="question-header">
+                        <div class="form-group"><label>Fråga / Kategori</label><input type="text" placeholder="Skriv frågan här..." value="${q.question}" onchange="updateQuestion(${qIndex}, 'question', this.value)"></div>
+                        <div class="form-group"><label>Svar</label><input type="text" placeholder="Rätt svar..." value="${q.answer}" onchange="updateQuestion(${qIndex}, 'answer', this.value)"></div>
+                    </div>
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; display: block;">Ledtrådar</label>
+                    <div class="clues-grid">
+                        ${cluesHtml}
+                        <button class="btn-outline btn-sm" onclick="addClue(${qIndex})" style="height: 34px;">+ Lägg till</button>
+                    </div>
+                `;
+                container.appendChild(qCard);
+                setTimeout(() => { qCard.querySelectorAll('textarea').forEach(ta => { ta.style.height = ta.scrollHeight + 'px'; }); }, 0);
+            });
+        }
+
+        function updatePackageTitle(val) { currentPackage.title = val; document.getElementById('editorTitle').innerText = val ? `Redigerar: ${val}` : 'Skapar nytt bräde'; }
+        function updateQuestion(qIndex, field, val) { currentPackage.questions[qIndex][field] = val; }
+        function updateClue(qIndex, cIndex, val) { currentPackage.questions[qIndex].clues[cIndex] = val; }
+        function addQuestion() { currentPackage.questions.push(createEmptyQuestion()); renderQuestions(); }
+        function removeQuestion(qIndex) { currentPackage.questions.splice(qIndex, 1); renderQuestions(); }
+        function addClue(qIndex) { currentPackage.questions[qIndex].clues.push(''); renderQuestions(); }
+
+        // Avancerat läge logik
+        function toggleAdvanced(isChecked) {
+            currentPackage.isAdvanced = isChecked;
+            document.getElementById('advancedEditorArea').style.display = isChecked ? 'block' : 'none';
+        }
+
+        function updateGeneratorCode(val) {
+            currentPackage.generatorCode = val;
+        }
+
+        function testGenerator() {
+            const code = currentPackage.generatorCode;
+            const previewBox = document.getElementById('generatorPreview');
+            
+            try {
+                // Vi skapar en ny funktion on the fly av strängen och kör den
+                const generateQuestion = new Function(code);
+                const result = generateQuestion();
+
+                // Validera att resultatet matchar vår JSON-struktur
+                if (!result || typeof result.question !== 'string' || typeof result.answer !== 'string' || !Array.isArray(result.clues)) {
+                    throw new Error("Koden returnerar inte rätt objektformat. Kontrollera att den returnerar { question: '', answer: '', clues: [] }");
+                }
+
+                let cluesHtml = result.clues.map(c => `<li>${c}</li>`).join('');
+                previewBox.style.borderColor = "var(--success)";
+                previewBox.innerHTML = `
+                    <div style="color: var(--success); font-weight: bold; margin-bottom: 8px;">✓ Generering lyckades! Exempelutdata:</div>
+                    <p><strong>Fråga:</strong> ${result.question}</p>
+                    <p><strong>Svar:</strong> ${result.answer}</p>
+                    <p style="margin-top: 5px;"><strong>Ledtrådar:</strong></p>
+                    <ul style="margin-left: 20px; font-size: 0.85rem;">${cluesHtml}</ul>
+                `;
+            } catch (error) {
+                previewBox.style.borderColor = "var(--danger)";
+                previewBox.innerHTML = `
+                    <div style="color: var(--danger); font-weight: bold; margin-bottom: 8px;">❌ Fel vid körning:</div>
+                    <p style="color: var(--danger); font-family: monospace;">${error.message}</p>
+                `;
+            }
+        }
+
+        // Spara, Ta bort, Export, Import
+        function saveCurrentPackage() {
+            if (!currentPackage.title.trim()) { alert("Vänligen ge paketet ett namn innan du sparar."); return; }
+            const existingIndex = packages.findIndex(p => p.id === currentPackage.id);
+            if (existingIndex >= 0) { packages[existingIndex] = currentPackage; } else { packages.push(currentPackage); }
+            localStorage.setItem('lockAndKeyPackages', JSON.stringify(packages));
+            renderDashboard();
+            const saveBtn = document.getElementById('saveBtn'); saveBtn.innerText = "✓ Sparat!";
+            setTimeout(() => saveBtn.innerText = "💾 Spara Paket", 2000);
+        }
+
+        function deletePackage(index) {
+            if (confirm(`Är du säker på att du vill ta bort "${packages[index].title}"?`)) {
+                if (currentPackage && currentPackage.id === packages[index].id) {
+                    currentPackage = null;
+                    document.getElementById('editorContent').innerHTML = '<div class="empty-state"><h3>Inget bräde valt</h3><p>Skapa ett nytt bräde eller välj ett från listan.</p></div>';
+                    document.getElementById('saveBtn').style.display = 'none'; document.getElementById('editorTitle').innerText = 'Redigerare';
+                }
+                packages.splice(index, 1);
+                localStorage.setItem('lockAndKeyPackages', JSON.stringify(packages)); renderDashboard();
+            }
+        }
+
+        function exportPackage(index) {
+            const pkg = packages[index];
+            const exportData = { title: pkg.title, questions: pkg.questions, isAdvanced: pkg.isAdvanced, generatorCode: pkg.generatorCode };
+            navigator.clipboard.writeText(JSON.stringify(exportData, null, 2)).then(() => { alert(`Kopierat till urklipp!`); })
+            .catch(err => { alert('Kunde inte kopiera. Saknas behörighet?'); });
+        }
+
+        function openImportModal() { document.getElementById('importJsonText').value = ''; document.getElementById('importModal').style.display = 'flex'; }
+        function closeImportModal() { document.getElementById('importModal').style.display = 'none'; }
+
+        function processImport() {
+            try {
+                const importedData = JSON.parse(document.getElementById('importJsonText').value);
+                if (!importedData.title || !Array.isArray(importedData.questions)) throw new Error("Ogiltigt format.");
+                const newPackage = {
+                    id: Date.now(), title: importedData.title, questions: importedData.questions,
+                    isAdvanced: importedData.isAdvanced || false, generatorCode: importedData.generatorCode || DEFAULT_GENERATOR_CODE
+                };
+                packages.push(newPackage); localStorage.setItem('lockAndKeyPackages', JSON.stringify(packages));
+                renderDashboard(); closeImportModal(); alert(`Brädet "${newPackage.title}" importerades!`);
+            } catch (err) { alert("Fel: " + err.message); }
+        }
+
+        // Byt ut den gamla funktionen mot denna:
+function playPackagePlaceholder(index) {
+    const pkg = packages[index];
+    
+    // 1. Generera en kort 4-teckens rumskod (ex: K9M2)
+    const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+    
+    // 2. Generera en lång säker host-token
+    const hostToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    
+    // 3. Spara temporärt i localStorage så vi kan ta med det till nästa sida
+    // I nästa steg ska host.html ta denna data och skicka till Firebase!
+    const pendingRoomData = {
+        roomCode: roomCode,
+        hostToken: hostToken,
+        package: pkg
+    };
+    
+    localStorage.setItem('lockAndKey_pendingRoom', JSON.stringify(pendingRoomData));
+    localStorage.setItem('lockAndKey_hostToken_' + roomCode, hostToken); // Spara bevis på ägarskap
+    
+    // 4. Skicka läraren till host-sidan
+    window.location.href = `host.html?room=${roomCode}`;
+}
+
+        init();
+    </script>
+</body>
+</html>
