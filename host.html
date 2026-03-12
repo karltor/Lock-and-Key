@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lock and Key - Lärarlobby</title>
+    <style>
+        :root {
+            --bg-color: #f0f4f8; --panel-bg: #ffffff;
+            --primary: #2563eb; --primary-hover: #1d4ed8;
+            --success: #16a34a; --success-hover: #15803d;
+            --danger: #ef4444; --danger-hover: #dc2626;
+            --warning: #f59e0b; --text-main: #1e293b;
+            --text-muted: #64748b; --border: #cbd5e1;
+            --border-radius: 6px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; }
+        
+        header { background-color: var(--primary); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .room-info h1 { font-size: 1.8rem; margin-bottom: 5px; }
+        .room-info p { font-size: 0.9rem; opacity: 0.9; }
+        
+        .main-container { display: flex; flex: 1; padding: 20px; gap: 20px; overflow: hidden; }
+
+        /* Vänster: Oplacerade elever */
+        .waiting-room { flex: 0 0 300px; background: var(--panel-bg); border-radius: var(--border-radius); border: 1px solid var(--border); display: flex; flex-direction: column; }
+        .panel-header { padding: 15px; border-bottom: 1px solid var(--border); background: #f8fafc; border-radius: var(--border-radius) var(--border-radius) 0 0; }
+        .player-list { padding: 10px; flex: 1; overflow-y: auto; background: #f1f5f9; min-height: 200px; }
+
+        /* Höger: Lagindelning */
+        .teams-area { flex: 1; background: var(--panel-bg); border-radius: var(--border-radius); border: 1px solid var(--border); display: flex; flex-direction: column; }
+        .teams-grid { padding: 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; overflow-y: auto; flex: 1; align-items: start; }
+        
+        /* Team Containers */
+        .team-box { border: 2px dashed var(--border); border-radius: var(--border-radius); min-height: 150px; background: #fff; display: flex; flex-direction: column; transition: border-color 0.2s; }
+        .team-box.drag-over { border-color: var(--success); background: #f0fdf4; }
+        .team-header { background: #e2e8f0; padding: 8px 12px; font-weight: bold; border-radius: 4px 4px 0 0; text-align: center; }
+        .team-players { padding: 10px; flex: 1; min-height: 100px; }
+
+        /* Elev-brickan */
+        .player-chip { background: white; border: 1px solid var(--border); padding: 8px 12px; border-radius: 20px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: grab; box-shadow: 0 1px 2px rgba(0,0,0,0.05); font-weight: 500; }
+        .player-chip:active { cursor: grabbing; }
+        .player-actions { display: flex; gap: 5px; }
+        .action-btn { background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.5; transition: opacity 0.2s; }
+        .action-btn:hover { opacity: 1; }
+
+        /* Knappar */
+        button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: 600; color: white; transition: background 0.2s; }
+        .btn-primary { background-color: var(--primary); } .btn-primary:hover { background-color: var(--primary-hover); }
+        .btn-success { background-color: var(--success); } .btn-success:hover { background-color: var(--success-hover); }
+        .btn-warning { background-color: var(--warning); color: white; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="room-info">
+            <h1 id="roomCodeDisplay">Rum: LADDAR...</h1>
+            <p>Väntar på att elever ska ansluta</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-primary" onclick="copyJoinLink()">🔗 Kopiera länk till elever</button>
+            <button class="btn-success" onclick="startGame()" id="startBtn" disabled>▶️ Starta Spelet</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <aside class="waiting-room">
+            <div class="panel-header">
+                <h3>Väntrum (Oplacerade)</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px;">Dra eleverna till ett lag eller använd knapparna till höger.</p>
+            </div>
+            <div class="player-list" id="unassignedList" ondragover="allowDrop(event)" ondrop="drop(event, null)">
+                </div>
+        </aside>
+
+        <main class="teams-area">
+            <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>Lagen</h3>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-warning" onclick="randomizeTeams(2)">🎲 Slumpa (Par)</button>
+                    <button class="btn-warning" onclick="randomizeTeams(3)">🎲 Slumpa (Treor)</button>
+                    <button class="btn-primary" onclick="addEmptyTeam()" style="background: transparent; color: var(--primary); border: 1px solid var(--primary);">+ Nytt tomt lag</button>
+                </div>
+            </div>
+            <div class="teams-grid" id="teamsGrid">
+                </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDdGSoiqa1_xf9RK-LeWe3ttepzpt-ocLs",
+            authDomain: "lock-and-key-e96a1.firebaseapp.com",
+            projectId: "lock-and-key-e96a1",
+            storageBucket: "lock-and-key-e96a1.firebasestorage.app",
+            messagingSenderId: "632843065326",
+            appId: "1:632843065326:web:6dbe765294c3aefe7460ff",
+            measurementId: "G-B6GN03FXJZ"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        window.db = getFirestore(app);
+
+        // State
+        window.roomId = new URLSearchParams(window.location.search).get('room');
+        window.localToken = localStorage.getItem('lockAndKey_hostToken_' + window.roomId);
+        window.players = [];
+        window.numberOfTeams = 4; // Startar med 4 tomma lag som UI-utfyllnad
+
+        async function initHost() {
+            if (!window.roomId || !window.localToken) {
+                alert("Du saknar behörighet. Skickar dig till elevinloggningen.");
+                window.location.href = `play.html?room=${window.roomId || ''}`;
+                return;
+            }
+
+            document.getElementById('roomCodeDisplay').innerText = `Rum: ${window.roomId}`;
+
+            // 1. Kontrollera om rummet precis skapades (data i localStorage från index.html)
+            const pendingDataStr = localStorage.getItem('lockAndKey_pendingRoom');
+            if (pendingDataStr) {
+                const pendingData = JSON.parse(pendingDataStr);
+                if (pendingData.roomCode === window.roomId && pendingData.hostToken === window.localToken) {
+                    // Spara paketet till Firebase
+                    await setDoc(doc(window.db, "rooms", window.roomId), {
+                        hostToken: window.localToken,
+                        status: "lobby",
+                        package: pendingData.package,
+                        createdAt: Date.now()
+                    });
+                    // Rensa så vi inte laddar upp igen vid uppdatering av sidan
+                    localStorage.removeItem('lockAndKey_pendingRoom');
+                }
+            }
+
+            // Rita upp initiala lag-boxar
+            renderTeamsGrid();
+
+            // 2. Lyssna på elever som ansluter
+            const playersRef = collection(window.db, "rooms", window.roomId, "players");
+            onSnapshot(playersRef, (snapshot) => {
+                window.players = [];
+                snapshot.forEach(doc => {
+                    window.players.push({ id: doc.id, ...doc.data() });
+                });
+                renderAllPlayers();
+                
+                // Aktivera start-knappen om alla är i ett lag
+                checkReadyToStart();
+            });
+        }
+
+        initHost();
+    </script>
+
+    <script>
+        // --- RENDERING ---
+        function renderTeamsGrid() {
+            const grid = document.getElementById('teamsGrid');
+            grid.innerHTML = '';
+            for (let i = 1; i <= window.numberOfTeams; i++) {
+                grid.innerHTML += `
+                    <div class="team-box" ondragover="allowDrop(event)" ondrop="drop(event, ${i})" ondragenter="this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')">
+                        <div class="team-header">Lag ${i}</div>
+                        <div class="team-players" id="team-${i}"></div>
+                    </div>
+                `;
+            }
+        }
+
+        function renderAllPlayers() {
+            const unassignedList = document.getElementById('unassignedList');
+            unassignedList.innerHTML = '';
+            
+            // Rensa lagboxarna
+            for (let i = 1; i <= window.numberOfTeams; i++) {
+                const teamEl = document.getElementById(`team-${i}`);
+                if(teamEl) teamEl.innerHTML = '';
+            }
+
+            window.players.forEach(p => {
+                const chip = document.createElement('div');
+                chip.className = 'player-chip';
+                chip.draggable = true;
+                chip.id = `player-${p.id}`;
+                chip.ondragstart = (e) => e.dataTransfer.setData("playerId", p.id);
+                
+                chip.innerHTML = `
+                    <span>${p.name}</span>
+                    <div class="player-actions">
+                        <button class="action-btn" title="Byt namn" onclick="renamePlayer('${p.id}', '${p.name}')">✏️</button>
+                        <button class="action-btn" title="Kicka" onclick="kickPlayer('${p.id}')">❌</button>
+                    </div>
+                `;
+
+                if (p.team === null || p.team === undefined) {
+                    unassignedList.appendChild(chip);
+                } else {
+                    // Om laget inte finns i UI än, skapa det
+                    if (p.team > window.numberOfTeams) {
+                        window.numberOfTeams = p.team;
+                        renderTeamsGrid();
+                        renderAllPlayers(); // Starta om renderingen så allt hamnar rätt
+                        return;
+                    }
+                    document.getElementById(`team-${p.team}`).appendChild(chip);
+                }
+            });
+        }
+
+        function addEmptyTeam() {
+            window.numberOfTeams++;
+            renderTeamsGrid();
+            renderAllPlayers();
+        }
+
+        // --- DRAG AND DROP LOKIG ---
+        function allowDrop(ev) { ev.preventDefault(); }
+        
+        async function drop(ev, teamId) {
+            ev.preventDefault();
+            // Ta bort grön markering
+            document.querySelectorAll('.team-box').forEach(el => el.classList.remove('drag-over'));
+            
+            const playerId = ev.dataTransfer.getData("playerId");
+            import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, updateDoc }) => {
+                const pRef = doc(window.db, "rooms", window.roomId, "players", playerId);
+                await updateDoc(pRef, { team: teamId });
+            });
+        }
+
+        // --- ELEV-HANTERING ---
+        async function renamePlayer(id, oldName) {
+            const newName = prompt("Nytt namn för eleven:", oldName);
+            if (newName && newName.trim() !== oldName) {
+                import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, updateDoc }) => {
+                    await updateDoc(doc(window.db, "rooms", window.roomId, "players", id), { name: newName.trim() });
+                });
+            }
+        }
+
+        async function kickPlayer(id) {
+            if (confirm("Är du säker på att du vill kicka eleven? De måste skriva in sitt namn igen.")) {
+                import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, deleteDoc }) => {
+                    await deleteDoc(doc(window.db, "rooms", window.roomId, "players", id));
+                });
+            }
+        }
+
+        async function randomizeTeams(teamSize) {
+            if (window.players.length === 0) {
+                alert("Det finns inga elever att slumpa än!");
+                return;
+            }
+
+            // Skapa en blandad kopia av spelar-arrayen (Fisher-Yates)
+            let shuffled = [...window.players];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+
+            import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, writeBatch }) => {
+                const batch = writeBatch(window.db);
+                
+                shuffled.forEach((player, index) => {
+                    // Dividera med teamSize och avrunda nedåt för att få lag 1, 2, 3 etc.
+                    const teamNum = Math.floor(index / teamSize) + 1;
+                    const pRef = doc(window.db, "rooms", window.roomId, "players", player.id);
+                    batch.update(pRef, { team: teamNum });
+                });
+
+                await batch.commit();
+            });
+        }
+
+        function checkReadyToStart() {
+            const startBtn = document.getElementById('startBtn');
+            const unassignedCount = window.players.filter(p => p.team === null || p.team === undefined).length;
+            const totalPlayers = window.players.length;
+
+            if (totalPlayers > 0 && unassignedCount === 0) {
+                startBtn.disabled = false;
+                startBtn.innerText = "▶️ Starta Spelet (" + totalPlayers + " elever redo)";
+            } else {
+                startBtn.disabled = true;
+                startBtn.innerText = "▶️ Starta Spelet (Väntar på lagindelning)";
+            }
+        }
+
+        function copyJoinLink() {
+            // Länken byggs utifrån vart du är hostad just nu
+            const origin = window.location.origin + window.location.pathname.replace('host.html', 'play.html');
+            const link = `${origin}?room=${window.roomId}`;
+            navigator.clipboard.writeText(link).then(() => alert("Länk kopierad till urklipp!\n\n" + link));
+        }
+
+        function startGame() {
+            alert("Nu ska vi ändra rumsstatus till 'playing' och gå till kontrollpanelen för spelet!");
+            // I nästa steg implementerar vi detta
+        }
+    </script>
+</body>
+</html>
