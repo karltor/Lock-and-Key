@@ -107,9 +107,15 @@
         const db = getFirestore(app);
 
         // Hårdkodade coola lagnamn
-        const TEAM_NAMES = ["Stormen", "Örnen", "Tornet", "Vargarna", "Björnarna", "Hajarna", "Lejonen", "Tigrarna", "Falkarna", "Kobrorna"];
-        function getTeamName(index) { return TEAM_NAMES[(index - 1) % TEAM_NAMES.length]; }
+    // Hårdkodade coola lagnamn
+        const ADJECTIVES = ["De Snabba", "De Starka", "De Listiga", "De Modiga", "De Galna", "De Smarta", "De Vilda", "De Mystiska", "De Tysta", "De Lysande"];
+        const NOUNS = ["Stormarna", "Örnarna", "Bönderna", "Vargarna", "Björnarna", "Hajarna", "Lejonen", "Tigrarna", "Falkarna", "Kobrorna"];
 
+        function getTeamName(index) {
+            const adjIndex = Math.floor((index - 1) / NOUNS.length) % ADJECTIVES.length;
+            const nounIndex = (index - 1) % NOUNS.length;
+            return index <= NOUNS.length ? NOUNS[nounIndex] : `${ADJECTIVES[adjIndex]} ${NOUNS[nounIndex]}`;
+        }
         const urlParams = new URLSearchParams(window.location.search);
         let currentRoom = urlParams.get('room');
         if (currentRoom) document.getElementById('roomInput').value = currentRoom.toUpperCase();
