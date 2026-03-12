@@ -16,7 +16,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: var(--bg-color); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; touch-action: manipulation; }
         
-        .card { background: var(--panel-bg); padding: 30px; border-radius: var(--border-radius); box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        .card { background: var(--panel-bg); padding: 30px; border-radius: var(--border-radius); box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; position: relative; }
         .card h1 { margin-bottom: 20px; color: var(--primary); }
         
         .form-group { margin-bottom: 15px; text-align: left; }
@@ -27,18 +27,34 @@
         button { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 1.1rem; font-weight: bold; color: white; background-color: var(--primary); transition: background 0.2s; margin-top: 10px; }
         button:hover { background-color: var(--primary-hover); }
 
+        /* Moderna felmeddelanden istället för alert() */
+        .error-msg { color: var(--danger); font-size: 0.9rem; margin-top: 10px; font-weight: 600; min-height: 20px; }
+        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--danger); color: white; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 1000; font-weight: bold; display: none; }
+
         /* Väntrummet */
-        #waitingScreen { display: none; width: 100%; max-width: 500px; display: flex; flex-direction: column; align-items: center; }
-        .status-badge { background: #e2e8f0; padding: 8px 16px; border-radius: 20px; font-weight: bold; margin-bottom: 20px; display: inline-block; }
+        #waitingScreen { display: none; width: 100%; max-width: 500px; flex-direction: column; align-items: center; }
+        .player-greeting { font-size: 1.2rem; font-weight: bold; margin-bottom: 15px; color: var(--text-main); }
         
+        .status-badge { padding: 10px 20px; border-radius: 20px; font-weight: bold; margin-bottom: 15px; display: inline-block; font-size: 1.1rem; transition: all 0.3s; }
+        .status-badge.waiting { background: #e2e8f0; color: var(--text-main); }
+        .status-badge.success { background: var(--success); color: white; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.3); transform: scale(1.05); }
+
+        .teammates-box { background: #f8fafc; border: 1px solid var(--border); padding: 15px; border-radius: var(--border-radius); width: 100%; margin-bottom: 20px; text-align: center; }
+        .teammates-box h4 { color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+        .teammates-box p { font-size: 1.1rem; font-weight: 600; color: var(--primary); }
+
         /* Minispelet */
-        .minigame-container { margin-top: 20px; background: white; padding: 20px; border-radius: var(--border-radius); box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center; width: 100%; }
+        .minigame-container { background: white; padding: 20px; border-radius: var(--border-radius); box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center; width: 100%; }
+        .score-board { display: flex; justify-content: space-around; margin-top: 10px; font-weight: bold; }
+        .score-board .current { color: var(--primary); font-size: 1.2rem; }
+        .score-board .high { color: var(--warning); font-size: 1.2rem; }
         #gameCanvas { background: #1e293b; border-radius: 50%; cursor: pointer; margin-top: 15px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); -webkit-tap-highlight-color: transparent; }
-        .score-display { font-size: 1.5rem; font-weight: bold; color: var(--primary); margin-top: 10px; }
         .game-instructions { font-size: 0.85rem; color: var(--text-muted); margin-top: 10px; }
     </style>
 </head>
 <body>
+
+    <div class="toast" id="toastMessage">Ett fel uppstod!</div>
 
     <div class="card" id="joinScreen">
         <h1>Lock and Key 🗝️</h1>
@@ -51,14 +67,24 @@
             <input type="text" id="nameInput" placeholder="Skriv in ditt namn" autocomplete="off">
         </div>
         <button onclick="joinRoom()">Gå med</button>
+        <div class="error-msg" id="loginError"></div>
     </div>
 
-    <div id="waitingScreen" style="display: none;">
-        <div class="status-badge" id="playerStatus">Väntar på lagindelning... 👀</div>
+    <div id="waitingScreen">
+        <div class="player-greeting" id="greetingName">Välkommen!</div>
+        <div class="status-badge waiting" id="playerStatus">Väntar på lagindelning... 👀</div>
+        
+        <div class="teammates-box" id="teammatesContainer" style="display: none;">
+            <h4>Dina lagkamrater</h4>
+            <p id="teammatesList">-</p>
+        </div>
         
         <div class="minigame-container">
             <h3>Låsdyrkaren</h3>
-            <div class="score-display">Poäng: <span id="scoreVal">0</span></div>
+            <div class="score-board">
+                <div class="current">Poäng: <span id="scoreVal">0</span></div>
+                <div class="high">High Score: <span id="highScoreVal">0</span></div>
+            </div>
             <canvas id="gameCanvas" width="250" height="250"></canvas>
             <p class="game-instructions">Tryck på cirkeln exakt när dyrken är i den gröna zonen!</p>
         </div>
@@ -66,7 +92,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, getDoc, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDdGSoiqa1_xf9RK-LeWe3ttepzpt-ocLs",
@@ -80,201 +106,188 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // Hämta rum från URL om det finns
+        // Hårdkodade coola lagnamn
+        const TEAM_NAMES = ["Stormen", "Örnen", "Tornet", "Vargarna", "Björnarna", "Hajarna", "Lejonen", "Tigrarna", "Falkarna", "Kobrorna"];
+        function getTeamName(index) { return TEAM_NAMES[(index - 1) % TEAM_NAMES.length]; }
+
         const urlParams = new URLSearchParams(window.location.search);
         let currentRoom = urlParams.get('room');
-        if (currentRoom) {
-            document.getElementById('roomInput').value = currentRoom.toUpperCase();
+        if (currentRoom) document.getElementById('roomInput').value = currentRoom.toUpperCase();
+
+        window.playerId = localStorage.getItem('lockAndKey_playerId') || 'student_' + Date.now() + Math.random().toString(36).substr(2, 5);
+        window.currentRoomCode = null; // Spara globalt för disconnect
+
+        // Visuell Error Hantering
+        function showError(msg) {
+            const errorEl = document.getElementById('loginError');
+            errorEl.innerText = msg;
+            setTimeout(() => errorEl.innerText = '', 4000);
         }
 
-        let playerId = localStorage.getItem('lockAndKey_playerId') || 'student_' + Date.now() + Math.random().toString(36).substr(2, 5);
-        let unsubscribe = null;
+        function showToast(msg) {
+            const toast = document.getElementById('toastMessage');
+            toast.innerText = msg;
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 4000);
+        }
 
         window.joinRoom = async function() {
             const roomCode = document.getElementById('roomInput').value.trim().toUpperCase();
             const playerName = document.getElementById('nameInput').value.trim();
 
-            if (!roomCode || !playerName) {
-                alert("Du måste fylla i både rumskod och namn!");
-                return;
-            }
+            if (!roomCode || !playerName) { showError("Du måste fylla i både rumskod och namn!"); return; }
 
-            // Kolla om rummet finns
             const roomRef = doc(db, "rooms", roomCode);
             const roomSnap = await getDoc(roomRef);
 
-            if (!roomSnap.exists()) {
-                alert("Hittar inte rummet. Kontrollera koden!");
-                return;
-            }
+            if (!roomSnap.exists()) { showError("Hittar inte rummet. Kontrollera koden!"); return; }
 
-            // Spara spelaren i Firebase
-            const playerRef = doc(db, "rooms", roomCode, "players", playerId);
-            await setDoc(playerRef, {
-                name: playerName,
-                team: null,
-                joinedAt: Date.now()
-            });
-
-            // Spara playerId så eleven kan ladda om sidan utan att försvinna
-            localStorage.setItem('lockAndKey_playerId', playerId);
+            window.currentRoomCode = roomCode;
+            const playerRef = doc(db, "rooms", roomCode, "players", window.playerId);
+            
+            await setDoc(playerRef, { name: playerName, team: null, joinedAt: Date.now() });
+            localStorage.setItem('lockAndKey_playerId', window.playerId);
 
             // Byt vy
             document.getElementById('joinScreen').style.display = 'none';
             document.getElementById('waitingScreen').style.display = 'flex';
+            document.getElementById('greetingName').innerText = `Välkommen, ${playerName}!`;
             
-            // Uppdatera URL:en rent visuellt så de slipper skriva koden igen om de råkar ladda om
             window.history.replaceState({}, '', `?room=${roomCode}`);
 
-            // Starta lyssnare på spelarens eget dokument
-            listenToGame(roomCode, playerId);
-            
-            // Starta minispelet
+            listenToGame(roomCode, window.playerId);
             startMinigame();
         };
 
+        // Rensa från databasen när eleven stänger fliken
+        window.addEventListener('beforeunload', () => {
+            if (window.currentRoomCode && window.playerId) {
+                // Vi använder deleteDoc direkt när fönstret stängs. 
+                const pRef = doc(db, "rooms", window.currentRoomCode, "players", window.playerId);
+                deleteDoc(pRef);
+            }
+        });
+
         function listenToGame(roomCode, pId) {
-            const playerRef = doc(db, "rooms", roomCode, "players", pId);
+            const playersRef = collection(db, "rooms", roomCode, "players");
             const roomRef = doc(db, "rooms", roomCode);
 
-            // Lyssna på sig själv (för team-indelning och kick)
-            unsubscribe = onSnapshot(playerRef, (docSnap) => {
-                if (!docSnap.exists()) {
-                    // Läraren har kickat eleven (raderat dokumentet)
-                    alert("Du blev utslängd från lobbyn. Var god skriv in ditt namn igen.");
-                    window.location.reload();
+            // Lyssna på ALLA spelare (för att kunna se lagkamrater och om man blir kickad)
+            onSnapshot(playersRef, (snap) => {
+                const allPlayers = [];
+                snap.forEach(d => allPlayers.push({ id: d.id, ...d.data() }));
+
+                const me = allPlayers.find(p => p.id === pId);
+                if (!me) {
+                    showToast("Du blev utslängd från lobbyn!");
+                    setTimeout(() => window.location.reload(), 2000);
                     return;
                 }
 
-                const data = docSnap.data();
                 const statusEl = document.getElementById('playerStatus');
+                const teammatesContainer = document.getElementById('teammatesContainer');
+                const teammatesList = document.getElementById('teammatesList');
 
-                if (data.team !== null) {
-                    statusEl.innerText = `✅ Du är placerad i Lag ${data.team}!`;
-                    statusEl.style.backgroundColor = 'var(--success)';
-                    statusEl.style.color = 'white';
+                if (me.team) {
+                    const tName = getTeamName(me.team);
+                    statusEl.innerHTML = `✅ Du är i lag <strong>${tName}</strong>`;
+                    statusEl.className = 'status-badge success';
+                    
+                    // Leta upp lagkamrater
+                    const mates = allPlayers.filter(p => p.team === me.team && p.id !== pId);
+                    teammatesContainer.style.display = 'block';
+                    
+                    if(mates.length > 0) {
+                        teammatesList.innerText = mates.map(m => m.name).join(', ');
+                    } else {
+                        teammatesList.innerHTML = `<em>Du är ensam i laget just nu...</em>`;
+                    }
                 } else {
-                    statusEl.innerText = `Väntar på lagindelning... 👀`;
-                    statusEl.style.backgroundColor = '#e2e8f0';
-                    statusEl.style.color = 'var(--text-main)';
+                    statusEl.innerHTML = `Väntar på lagindelning... 👀`;
+                    statusEl.className = 'status-badge waiting';
+                    teammatesContainer.style.display = 'none';
                 }
             });
 
             // Lyssna på rummet (för att veta när spelet startar)
             onSnapshot(roomRef, (roomSnap) => {
                 if(roomSnap.exists() && roomSnap.data().status === "playing") {
-                    alert("Nu kör vi! (Här kommer vi ladda själva spelet i nästa steg)");
+                    showToast("Spelet startar! Gör dig redo...");
                     // window.location.href = `game.html?room=${roomCode}`;
                 }
             });
         }
 
-        // --- MINISPEL LOGIK: LÅSDYRKAREN ---
+        // --- MINISPEL LOGIK ---
         function startMinigame() {
             const canvas = document.getElementById('gameCanvas');
             const ctx = canvas.getContext('2d');
             const scoreEl = document.getElementById('scoreVal');
+            const highScoreEl = document.getElementById('highScoreVal');
             
             let score = 0;
+            let highScore = localStorage.getItem('lockAndKey_highscore') || 0;
+            highScoreEl.innerText = highScore;
+
             let angle = 0;
-            let speed = 0.03; // Start-hastighet (Radianer per frame)
-            
-            // Målets egenskaper (gröna zonen)
+            let speed = 0.03; 
             let targetStart = Math.random() * Math.PI * 2;
-            let targetWidth = 0.8; // Hur bred zonen är i radianer (ca 45 grader från början)
-            
+            let targetWidth = 0.8; 
             let isAnimating = true;
 
             function draw() {
                 if (!isAnimating) return;
-                
-                // Rensa canvas
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                const cx = canvas.width / 2;
-                const cy = canvas.height / 2;
-                const radius = cx - 20;
+                const cx = canvas.width / 2; const cy = canvas.height / 2; const radius = cx - 20;
 
-                // Bakgrundscirkel (Låset)
-                ctx.beginPath();
-                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-                ctx.strokeStyle = '#334155';
-                ctx.lineWidth = 15;
-                ctx.stroke();
+                ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+                ctx.strokeStyle = '#334155'; ctx.lineWidth = 15; ctx.stroke();
 
-                // Mål-zonen (Grön)
-                ctx.beginPath();
-                ctx.arc(cx, cy, radius, targetStart, targetStart + targetWidth);
-                ctx.strokeStyle = '#22c55e';
-                ctx.lineWidth = 15;
-                ctx.stroke();
+                ctx.beginPath(); ctx.arc(cx, cy, radius, targetStart, targetStart + targetWidth);
+                ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 15; ctx.stroke();
 
-                // Snurrande Dyrken (Röd)
-                ctx.beginPath();
-                ctx.moveTo(cx, cy);
+                ctx.beginPath(); ctx.moveTo(cx, cy);
                 ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
-                ctx.strokeStyle = '#ef4444';
-                ctx.lineWidth = 4;
-                ctx.lineCap = 'round';
-                ctx.stroke();
+                ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.stroke();
 
-                // Mitten-pluppen
-                ctx.beginPath();
-                ctx.arc(cx, cy, 8, 0, Math.PI * 2);
-                ctx.fillStyle = '#ef4444';
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+                ctx.fillStyle = '#ef4444'; ctx.fill();
 
-                // Uppdatera vinkel
                 angle += speed;
                 if (angle > Math.PI * 2) angle -= Math.PI * 2;
-
                 requestAnimationFrame(draw);
             }
 
-            // Klick/Touch för att dyrka
             function tryUnlock(e) {
-                e.preventDefault(); // Förhindrar dubbelklick/zoom på mobiler
-
-                // Matematik för att se om 'angle' är inuti 'targetStart' till 'targetStart + targetWidth'
+                e.preventDefault(); 
                 let end = targetStart + targetWidth;
                 let hit = false;
                 
-                if (end <= Math.PI * 2) {
-                    hit = (angle >= targetStart && angle <= end);
-                } else {
-                    // Om den gröna zonen går över gränsen mellan 360 och 0 grader
-                    hit = (angle >= targetStart || angle <= (end - Math.PI * 2));
-                }
+                if (end <= Math.PI * 2) hit = (angle >= targetStart && angle <= end);
+                else hit = (angle >= targetStart || angle <= (end - Math.PI * 2));
 
                 if (hit) {
-                    // Träff!
-                    score++;
-                    scoreEl.innerText = score;
-                    speed += 0.005; // Öka hastigheten
-                    targetWidth = Math.max(0.15, targetWidth - 0.05); // Krymp zonen (men inte för liten)
-                    
-                    // Ny slumpmässig position för målet
+                    score++; scoreEl.innerText = score;
+                    if(score > highScore) {
+                        highScore = score;
+                        localStorage.setItem('lockAndKey_highscore', highScore);
+                        highScoreEl.innerText = highScore;
+                    }
+                    speed += 0.005; 
+                    targetWidth = Math.max(0.15, targetWidth - 0.05); 
                     targetStart = Math.random() * Math.PI * 2;
-                    
-                    // Liten visuell blinkning
                     canvas.style.boxShadow = "inset 0 0 40px rgba(34, 197, 94, 0.8)";
                     setTimeout(() => canvas.style.boxShadow = "inset 0 0 20px rgba(0,0,0,0.5)", 150);
                 } else {
-                    // Miss!
-                    score = 0;
-                    scoreEl.innerText = score;
-                    speed = 0.03; // Återställ hastighet
-                    targetWidth = 0.8; // Återställ zonens storlek
-                    
-                    // Visuell röd blinkning
+                    score = 0; scoreEl.innerText = score;
+                    speed = 0.03; targetWidth = 0.8; 
                     canvas.style.boxShadow = "inset 0 0 40px rgba(239, 68, 68, 0.8)";
                     setTimeout(() => canvas.style.boxShadow = "inset 0 0 20px rgba(0,0,0,0.5)", 150);
                 }
             }
-
             canvas.addEventListener('mousedown', tryUnlock);
             canvas.addEventListener('touchstart', tryUnlock, {passive: false});
-
-            draw(); // Starta loopen
+            draw();
         }
     </script>
 </body>
