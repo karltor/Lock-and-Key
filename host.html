@@ -74,7 +74,6 @@
         
         .leaderboard-container { position: relative; width: 100%; flex: 1; overflow-y: auto; overflow-x: hidden; }
         
-        /* Uppdaterad .lb-card för dynamisk höjd-animation */
         .lb-card { position: absolute; left: 0; right: 0; background: white; border: 1px solid var(--border); border-radius: var(--border-radius); padding: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s, height 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); overflow: hidden; }
         .lb-info { flex: 1; min-width: 0; padding-right: 15px; }
         .lb-info h2 { font-size: 1.2rem; margin-bottom: 3px; color: var(--text-main); display: flex; align-items: center; gap: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -164,22 +163,22 @@
     </div>
 
     <script>
-        // --- ANTI-CHEAT HASHING ---
         function hashAnswer(str) {
             let hash = 0; 
             let s = str.toString().trim().toLowerCase();
             for (let i = 0; i < s.length; i++) {
                 let char = s.charCodeAt(i);
                 hash = ((hash << 5) - hash) + char;
-                hash = hash & hash; // Konvertera till 32bit integer
+                hash = hash & hash; 
             }
             return hash.toString();
         }
     </script>
 
     <script type="module">
+        // Lade till getDocs i importen
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, collection, onSnapshot, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, updateDoc, deleteDoc, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDdGSoiqa1_xf9RK-LeWe3ttepzpt-ocLs",
@@ -200,7 +199,6 @@
         window.gameTimerInterval = null;
         window.roomData = null;
 
-        // --- NAMN OCH FÄRGER ---
         const ADJECTIVES = ["De Snabba", "De Starka", "De Listiga", "De Modiga", "De Galna", "De Smarta", "De Vilda", "De Mystiska", "De Tysta", "De Lysande"];
         const NOUNS = ["Stormarna", "Örnarna", "Tornen", "Vargarna", "Björnarna", "Hajarna", "Lejonen", "Tigrarna", "Falkarna", "Kobrorna"];
         const TEAM_COLORS = ["#ffb3ba", "#ffdfba", "#ffffba", "#baffc9", "#bae1ff", "#e8cbff", "#ffcbf2", "#e2f0cb", "#ffdac1", "#c5a3ff"];
@@ -235,7 +233,6 @@
                 if (pendingData.roomCode === window.roomId && pendingData.hostToken === window.localToken) {
                     const safePackage = JSON.parse(JSON.stringify(pendingData.package));
                     
-                    // --- NY FIX: OM 0 FRÅGOR & AVANCERAT LÄGE, GENERERA FÖRSTA FRÅGAN MANUELLT ---
                     if (safePackage.questions.length === 0 && safePackage.isAdvanced) {
                         try {
                             const generateFirstQuestion = new Function(safePackage.generatorCode);
@@ -249,12 +246,10 @@
                         }
                     }
 
-                    // KRYPTERING AV SVAR
                     safePackage.questions.forEach(q => {
                         q.answer = hashAnswer(q.answer);
                     });
 
-                    // Databas-upload med new Date()
                     await setDoc(doc(window.db, "rooms", window.roomId), { 
                         hostToken: window.localToken, 
                         status: "lobby", 
@@ -267,7 +262,6 @@
 
             renderTeamsGrid();
 
-            // Lyssna på elever i realtid
             onSnapshot(collection(window.db, "rooms", window.roomId, "players"), (snapshot) => {
                 window.players = []; 
                 snapshot.forEach(doc => window.players.push({ id: doc.id, ...doc.data() }));
@@ -276,12 +270,10 @@
                     renderAllPlayers(); 
                     checkReadyToStart(); 
                 } else if (document.getElementById('gameScreen').style.display !== 'none') {
-                    // Uppdatera leaderboarden om någon byter namn medan spelet är igång
                     renderLeaderboard();
                 }
             });
 
-            // Lyssna på rummets status (spelläge)
             onSnapshot(doc(window.db, "rooms", window.roomId), (docSnap) => {
                 if(docSnap.exists()) {
                     window.roomData = docSnap.data();
@@ -304,10 +296,49 @@
                         document.getElementById('roomStatusText').innerText = "Spelet är avslutat!"; 
                         
                         clearInterval(window.gameTimerInterval); 
+                        
+                        // Rita pallen MEDAN datan fortfarande finns
                         renderPodium();
+                        
+                        // Städa databasen i bakgrunden
+                        autoCleanupRoom();
+                    }
+                } else {
+                    // Om dokumentet helt raderats (vår städning har körts)
+                    // Håll kvar prispallen om vi är på den skärmen, annars till startsidan.
+                    if (document.getElementById('podiumScreen').style.display !== 'flex') {
+                        // Raderades av misstag mitt i spelet?
+                        window.location.href = 'index.html';
                     }
                 }
             });
+        }
+
+        window.autoCleanupRoom = async function() {
+            try {
+                // Vänta 3 sekunder så att elevernas enheter hinner uppdateras till "finished"
+                setTimeout(async () => {
+                    // 1. Radera alla spelare i underkollektionen
+                    const playersRef = collection(window.db, "rooms", window.roomId, "players");
+                    const playersSnap = await getDocs(playersRef);
+                    const batch = writeBatch(window.db);
+                    
+                    playersSnap.forEach(playerDoc => {
+                        batch.delete(playerDoc.ref);
+                    });
+                    await batch.commit();
+
+                    // 2. Radera själva rummet
+                    await deleteDoc(doc(window.db, "rooms", window.roomId));
+
+                    // 3. Städa bort den lokala nyckeln
+                    localStorage.removeItem('lockAndKey_hostToken_' + window.roomId);
+                    
+                    console.log("Databasen är rensad på personuppgifter och stängd.");
+                }, 3000);
+            } catch (error) {
+                console.error("Fel vid autostädning:", error);
+            }
         }
 
         window.executeStartGame = async function() {
@@ -372,12 +403,10 @@
                     lbGrid.appendChild(card);
                 }
                 
-                // Hämta spelare i laget för att visa om det är topp 3
                 const isTop3 = index < 3;
                 const teamPlayersArr = window.players.filter(p => p.team === t.id).map(p => p.name);
                 const teamPlayersText = teamPlayersArr.join(', ');
                 
-                // Dynamisk höjd baserad på plats
                 const cardHeight = isTop3 ? 125 : 105;
                 
                 const membersHtml = isTop3 ? `<p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${teamPlayersText}">👥 ${teamPlayersText || 'Inga spelare anslutna'}</p>` : '';
@@ -394,14 +423,11 @@
                     <div class="lb-score">${t.score}p</div>
                 `;
                 
-                // Sätt höjd och position (Y-offset)
                 card.style.height = cardHeight + 'px';
                 card.style.transform = `translateY(${currentYOffset}px)`;
                 
-                // Öka Y-offset för nästa kort + 15px mellanrum
                 currentYOffset += cardHeight + 15;
                 
-                // Guld-ram för ledaren (om de har mer än 0 poäng)
                 if(index === 0 && t.score > 0) {
                     card.style.boxShadow = "0 0 15px rgba(255, 215, 0, 0.6), inset 0 0 0 2px gold"; 
                 } else {
@@ -409,7 +435,6 @@
                 }
             });
 
-            // Sätt behållarens dynamiska totalhöjd så det kan scrollas
             lbGrid.style.height = currentYOffset + 'px';
         }
 
