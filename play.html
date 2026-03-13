@@ -174,7 +174,6 @@
         let lastKnownPenalty = 0;
         let isMinigameActive = false;
         
-        // Tracker för animationen
         window.lastQuestionIndex = -1;
 
         function showToast(msg, type = "error") {
@@ -221,7 +220,6 @@
                     return; 
                 }
 
-                // DYNAMISK NAMNUPPDATERING FÖR VÄNTRUMMET
                 document.getElementById('greetingName').innerText = `Välkommen, ${me.name}!`;
 
                 myTeamId = me.team;
@@ -261,13 +259,10 @@
 
             const tData = roomData.teamData[myTeamId];
             
-            // --- SUCCESS ANIMATION ---
-            // Om index har ökat, spela upp animationen för alla lagkamrater
             if (window.lastQuestionIndex !== -1 && tData.currentQuestionIndex > window.lastQuestionIndex) {
                 const qBox = document.getElementById('qBox');
-                // Nollställ animationen så att den kan triggas om
                 qBox.classList.remove('animate-success');
-                void qBox.offsetWidth; // Magi: Tvingar webbläsaren att uppdatera DOM:en
+                void qBox.offsetWidth;
                 qBox.classList.add('animate-success');
             }
             window.lastQuestionIndex = tData.currentQuestionIndex;
@@ -302,14 +297,12 @@
 
             document.getElementById('skipBtn').disabled = tData.wrongGuesses < 5;
 
-            // Ledtrådsfördelning
             const myTeammates = allPlayersInRoom.filter(p => p.team === myTeamId).sort((a,b) => a.id.localeCompare(b.id));
             const myIndexInTeam = myTeammates.findIndex(p => p.id === window.playerId);
             const myClues = currentQ.clues.filter((clue, index) => index % myTeammates.length === myIndexInTeam);
             
             document.getElementById('cluesContainer').innerHTML = myClues.map(c => `<div class="clue-item">💡 ${c}</div>`).join('') || "<em>Du har inga ledtrådar för denna fråga. Lyssna på ditt lag!</em>";
             
-            // Sätt fokus på rutan igen automatiskt så man slipper klicka varje gång
             setTimeout(() => document.getElementById('answerInput').focus(), 100);
         }
 
@@ -326,8 +319,22 @@
             inputEl.value = ''; 
 
             const hashedGuess = hashAnswer(answer);
+            let isCorrect = (hashedGuess === currentQ.answer);
 
-            if (hashedGuess === currentQ.answer) {
+            // --- NY LOGIK FÖR ATT IGNORERA SUFFIX (%, kr, st etc.) ---
+            if (!isCorrect) {
+                // Regex som letar efter en inledande siffra/tal (tillåter kommatecken och punkter, t.ex. "12,5")
+                const numberMatch = answer.trim().match(/^(\-?\d+(?:[.,]\d+)?)/);
+                if (numberMatch) {
+                    const numOnly = numberMatch[1]; // Ex: "12,5" dras ut från "12,5 kr"
+                    if (hashAnswer(numOnly) === currentQ.answer) {
+                        isCorrect = true; // Svaret blev rätt efter att vi skalade bort suffixet!
+                    }
+                }
+            }
+            // ---------------------------------------------------------
+
+            if (isCorrect) {
                 showToast("Rätt svar! Snyggt jobbat!", "info"); 
                 const potentialPoints = Math.max(10, Math.floor(100 * Math.pow(0.9, tData.wrongGuesses)));
                 let nextIndex = tData.currentQuestionIndex + 1;
