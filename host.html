@@ -56,7 +56,7 @@
         .toast.error { background: var(--danger); }
         .toast.success { background: var(--success); }
 
-        /* MODAL (Byter ut alert/prompt/confirm) */
+        /* MODAL */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
         .modal-box { background: white; padding: 25px; border-radius: var(--border-radius); width: 400px; max-width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
         .modal-box h3 { margin-bottom: 10px; color: var(--text-main); }
@@ -73,10 +73,13 @@
         .timer-btn:hover { background: #cbd5e1; }
         
         .leaderboard-container { position: relative; width: 100%; flex: 1; overflow-y: auto; overflow-x: hidden; }
-        .lb-card { position: absolute; left: 0; right: 0; height: 90px; background: white; border: 1px solid var(--border); border-radius: var(--border-radius); padding: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s; }
-        .lb-info h2 { font-size: 1.2rem; margin-bottom: 3px; color: var(--text-main); display: flex; align-items: center; gap: 10px;}
-        .lb-info p { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 5px;}
-        .lb-score { font-size: 2rem; font-weight: bold; color: var(--primary); text-align: right; width: 100px;}
+        
+        /* Uppdaterad .lb-card för dynamisk höjd-animation */
+        .lb-card { position: absolute; left: 0; right: 0; background: white; border: 1px solid var(--border); border-radius: var(--border-radius); padding: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s, height 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); overflow: hidden; }
+        .lb-info { flex: 1; min-width: 0; padding-right: 15px; }
+        .lb-info h2 { font-size: 1.2rem; margin-bottom: 3px; color: var(--text-main); display: flex; align-items: center; gap: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .lb-info p { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 2px;}
+        .lb-score { font-size: 2rem; font-weight: bold; color: var(--primary); text-align: right; width: 100px; flex-shrink: 0; }
 
         /* PODIUM */
         #podiumScreen { display: none; flex-direction: column; align-items: center; justify-content: center; flex: 1; }
@@ -162,7 +165,6 @@
 
     <script>
         // --- ANTI-CHEAT HASHING ---
-        // Samma funktion måste finnas i play.html
         function hashAnswer(str) {
             let hash = 0; 
             let s = str.toString().trim().toLowerCase();
@@ -231,8 +233,23 @@
                 }
                 
                 if (pendingData.roomCode === window.roomId && pendingData.hostToken === window.localToken) {
-                    // KRYPTERING AV SVAR: Vi loopar paketet och hashar svaren innan det laddas upp.
                     const safePackage = JSON.parse(JSON.stringify(pendingData.package));
+                    
+                    // --- NY FIX: OM 0 FRÅGOR & AVANCERAT LÄGE, GENERERA FÖRSTA FRÅGAN MANUELLT ---
+                    if (safePackage.questions.length === 0 && safePackage.isAdvanced) {
+                        try {
+                            const generateFirstQuestion = new Function(safePackage.generatorCode);
+                            const firstQ = generateFirstQuestion();
+                            if (firstQ && firstQ.question && firstQ.answer && firstQ.clues) {
+                                safePackage.questions.push(firstQ);
+                            }
+                        } catch (e) {
+                            console.error("Fel vid generering av initial fråga:", e);
+                            showToast("Kunde inte generera första frågan från din kod.", "error");
+                        }
+                    }
+
+                    // KRYPTERING AV SVAR
                     safePackage.questions.forEach(q => {
                         q.answer = hashAnswer(q.answer);
                     });
@@ -258,6 +275,9 @@
                 if(document.getElementById('lobbyScreen').style.display !== 'none') { 
                     renderAllPlayers(); 
                     checkReadyToStart(); 
+                } else if (document.getElementById('gameScreen').style.display !== 'none') {
+                    // Uppdatera leaderboarden om någon byter namn medan spelet är igång
+                    renderLeaderboard();
                 }
             });
 
@@ -340,8 +360,7 @@
                 ...window.roomData.teamData[tId]
             })).sort((a, b) => b.score - a.score);
 
-            // Dynamisk höjd för att animeringen (absolute positioning) ska få plats
-            lbGrid.style.height = (teamsArray.length * 105) + 'px';
+            let currentYOffset = 0;
 
             teamsArray.forEach((t, index) => {
                 let card = document.getElementById(`lb-card-${t.id}`);
@@ -353,17 +372,34 @@
                     lbGrid.appendChild(card);
                 }
                 
+                // Hämta spelare i laget för att visa om det är topp 3
+                const isTop3 = index < 3;
+                const teamPlayersArr = window.players.filter(p => p.team === t.id).map(p => p.name);
+                const teamPlayersText = teamPlayersArr.join(', ');
+                
+                // Dynamisk höjd baserad på plats
+                const cardHeight = isTop3 ? 125 : 105;
+                
+                const membersHtml = isTop3 ? `<p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${teamPlayersText}">👥 ${teamPlayersText || 'Inga spelare anslutna'}</p>` : '';
+
                 card.innerHTML = `
                     <div class="lb-info">
-                        <h2><span style="display:inline-block; width:25px; height:25px; border-radius:50%; background:${t.color}; border:1px solid rgba(0,0,0,0.1);"></span> ${index + 1}. ${t.name}</h2>
+                        <h2><span style="display:inline-block; min-width:25px; height:25px; border-radius:50%; background:${t.color}; border:1px solid rgba(0,0,0,0.1);"></span> ${index + 1}. ${t.name}</h2>
                         <p>Fråga ${t.currentQuestionIndex + 1} av ${window.roomData.package.questions.length}</p>
-                        <button class="btn-danger" style="padding: 4px 8px; font-size: 0.75rem;" onclick="givePenalty('${t.id}')">-50p (Fusk)</button>
+                        ${membersHtml}
+                        <div style="margin-top: 6px;">
+                            <button class="btn-danger" style="padding: 4px 8px; font-size: 0.75rem;" onclick="givePenalty('${t.id}')">-50p (Fusk)</button>
+                        </div>
                     </div>
                     <div class="lb-score">${t.score}p</div>
                 `;
                 
-                // Mjuk transformering av positionen (Rankingen)
-                card.style.transform = `translateY(${index * 105}px)`;
+                // Sätt höjd och position (Y-offset)
+                card.style.height = cardHeight + 'px';
+                card.style.transform = `translateY(${currentYOffset}px)`;
+                
+                // Öka Y-offset för nästa kort + 15px mellanrum
+                currentYOffset += cardHeight + 15;
                 
                 // Guld-ram för ledaren (om de har mer än 0 poäng)
                 if(index === 0 && t.score > 0) {
@@ -372,6 +408,9 @@
                     card.style.boxShadow = "0 2px 4px rgba(0,0,0,0.05)";
                 }
             });
+
+            // Sätt behållarens dynamiska totalhöjd så det kan scrollas
+            lbGrid.style.height = currentYOffset + 'px';
         }
 
         window.givePenalty = async function(teamId) {
