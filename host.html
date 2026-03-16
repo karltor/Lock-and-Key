@@ -176,7 +176,6 @@
     </script>
 
     <script type="module">
-        // Lade till getDocs i importen
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
         import { getFirestore, doc, setDoc, collection, onSnapshot, updateDoc, deleteDoc, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
@@ -297,17 +296,11 @@
                         
                         clearInterval(window.gameTimerInterval); 
                         
-                        // Rita pallen MEDAN datan fortfarande finns
                         renderPodium();
-                        
-                        // Städa databasen i bakgrunden
                         autoCleanupRoom();
                     }
                 } else {
-                    // Om dokumentet helt raderats (vår städning har körts)
-                    // Håll kvar prispallen om vi är på den skärmen, annars till startsidan.
                     if (document.getElementById('podiumScreen').style.display !== 'flex') {
-                        // Raderades av misstag mitt i spelet?
                         window.location.href = 'index.html';
                     }
                 }
@@ -316,9 +309,7 @@
 
         window.autoCleanupRoom = async function() {
             try {
-                // Vänta 3 sekunder så att elevernas enheter hinner uppdateras till "finished"
                 setTimeout(async () => {
-                    // 1. Radera alla spelare i underkollektionen
                     const playersRef = collection(window.db, "rooms", window.roomId, "players");
                     const playersSnap = await getDocs(playersRef);
                     const batch = writeBatch(window.db);
@@ -328,10 +319,7 @@
                     });
                     await batch.commit();
 
-                    // 2. Radera själva rummet
                     await deleteDoc(doc(window.db, "rooms", window.roomId));
-
-                    // 3. Städa bort den lokala nyckeln
                     localStorage.removeItem('lockAndKey_hostToken_' + window.roomId);
                     
                     console.log("Databasen är rensad på personuppgifter och stängd.");
@@ -525,11 +513,28 @@
         }
 
         function renderAllPlayers() {
+            // Hitta det högsta lagnumret bland alla elever
+            let maxTeam = 4; // Visa alltid minst 4 lag
+            window.players.forEach(p => {
+                if (p.team && p.team > maxTeam) {
+                    maxTeam = p.team;
+                }
+            });
+
+            // Om vi behöver fler lag för att rymma eleverna, uppdatera först gridden!
+            if (maxTeam > window.numberOfTeams) {
+                window.numberOfTeams = maxTeam;
+                renderTeamsGrid();
+            }
+
+            // Töm nuvarande DOM-containrar säkert
             document.getElementById('unassignedList').innerHTML = '';
             for (let i = 1; i <= window.numberOfTeams; i++) { 
                 const t = document.getElementById(`team-${i}`); 
                 if(t) t.innerHTML = ''; 
             }
+
+            // Rita upp varje spelare
             window.players.forEach(p => {
                 const chip = document.createElement('div'); 
                 chip.className = 'player-chip'; 
@@ -546,13 +551,8 @@
                 if (p.team == null) {
                     document.getElementById('unassignedList').appendChild(chip); 
                 } else { 
-                    if (p.team > window.numberOfTeams) { 
-                        window.numberOfTeams = p.team; 
-                        renderTeamsGrid(); 
-                        renderAllPlayers(); 
-                        return; 
-                    } 
-                    document.getElementById(`team-${p.team}`).appendChild(chip); 
+                    const teamContainer = document.getElementById(`team-${p.team}`);
+                    if (teamContainer) teamContainer.appendChild(chip); 
                 }
             });
         }
@@ -620,19 +620,28 @@
 
         async function randomizeTeams(teamSize) {
             if (window.players.length === 0) return showToast("Inga elever att slumpa!", "error"); 
+            
             let shuffled = [...window.players]; 
+            // Blanda ordningen slumpmässigt (Fisher-Yates)
             for (let i = shuffled.length - 1; i > 0; i--) { 
                 const j = Math.floor(Math.random() * (i + 1)); 
                 [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; 
             }
+            
+            // Räkna ut hur många lag som kommer att behövas
+            const numTeams = Math.ceil(shuffled.length / teamSize);
+            
             import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js").then(async ({ doc, writeBatch }) => { 
                 const batch = writeBatch(window.db); 
+                
                 shuffled.forEach((player, index) => { 
-                    const teamNum = Math.floor(index / teamSize) + 1; 
+                    // Modulo (%) skapar en jämn spridning: Lag 1, Lag 2, Lag 3, Lag 1, Lag 2, Lag 3...
+                    const teamNum = (index % numTeams) + 1; 
                     batch.update(doc(window.db, "rooms", window.roomId, "players", player.id), { team: teamNum }); 
                 }); 
+                
                 await batch.commit(); 
-                showToast("Lagen har slumpats!", "success"); 
+                showToast("Lagen har slumpats jämnt!", "success"); 
             });
         }
 
