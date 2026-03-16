@@ -188,7 +188,34 @@ return {
         let packages = JSON.parse(localStorage.getItem('lockAndKeyPackages')) || [];
         let currentPackage = null;
 
-        function init() { renderDashboard(); }
+        async function init() { 
+            const hasInitialized = localStorage.getItem('lockAndKey_initialized');
+
+            // Hämtar ditt förberedda JSON-paket från root
+            if (!hasInitialized) {
+                try {
+                    const response = await fetch('algebraiska%20problem.json');
+                    if (response.ok) {
+                        const defaultPackage = await response.json();
+                        
+                        // Säkerställer att id och grundvariabler finns
+                        defaultPackage.id = Date.now();
+                        if (defaultPackage.isAdvanced === undefined) defaultPackage.isAdvanced = false;
+                        if (!defaultPackage.generatorCode) defaultPackage.generatorCode = DEFAULT_GENERATOR_CODE;
+                        
+                        packages.push(defaultPackage);
+                        localStorage.setItem('lockAndKeyPackages', JSON.stringify(packages));
+                        localStorage.setItem('lockAndKey_initialized', 'true');
+                    } else {
+                        console.error("Kunde inte ladda 'algebraiska problem.json'. Kontrollera att filen finns i root-mappen.");
+                    }
+                } catch (error) {
+                    console.error("Fetch misslyckades:", error);
+                }
+            }
+
+            renderDashboard(); 
+        }
 
         function renderDashboard() {
             const list = document.getElementById('packageList');
@@ -224,7 +251,6 @@ return {
 
         function editPackage(index) {
             currentPackage = JSON.parse(JSON.stringify(packages[index]));
-            // Se till att äldre paket får de nya egenskaperna
             if(currentPackage.isAdvanced === undefined) currentPackage.isAdvanced = false;
             if(!currentPackage.generatorCode) currentPackage.generatorCode = DEFAULT_GENERATOR_CODE;
             renderEditor();
