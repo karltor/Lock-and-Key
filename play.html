@@ -27,16 +27,17 @@
         .form-group label { display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 5px; color: var(--text-muted); }
         input[type="text"] { width: 100%; padding: 12px; border: 2px solid var(--border); border-radius: 6px; font-size: 1rem; outline: none; transition: border-color 0.2s; text-align: center;}
         input[type="text"]:focus { border-color: var(--primary); }
+        input[type="text"]:disabled { background-color: #e2e8f0; cursor: not-allowed; }
         
         button { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 1.1rem; font-weight: bold; color: white; background-color: var(--primary); transition: background 0.2s; margin-top: 10px; }
-        button:hover { background-color: var(--primary-hover); }
+        button:hover:not(:disabled) { background-color: var(--primary-hover); }
         button:disabled { background-color: var(--border); cursor: not-allowed; opacity: 0.7; }
-        .btn-warning { background-color: var(--warning); } .btn-warning:hover { background-color: #d97706; }
+        .btn-warning { background-color: var(--warning); } .btn-warning:hover:not(:disabled) { background-color: #d97706; }
 
         .error-msg { color: var(--danger); font-size: 0.9rem; margin-top: 10px; font-weight: 600; min-height: 20px; }
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--danger); color: white; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 1000; font-weight: bold; display: none; }
         .toast.warning { background: var(--warning); }
-        .toast.info { background: var(--text-main); }
+        .toast.info { background: var(--success); } /* Ändrade till grön för rätt svar, kändes rimligt! */
 
         /* VÄNTRUM & MINISPEL */
         #waitingScreen { display: none; width: 100%; max-width: 500px; flex-direction: column; align-items: center; }
@@ -117,7 +118,7 @@
             <div class="points-info">Rätt svar ger: <strong id="potentialPointsDisplay">100</strong> poäng</div>
             
             <input type="text" id="answerInput" placeholder="Skriv ert gemensamma svar här..." autocomplete="off" onkeypress="if(event.key === 'Enter') submitAnswer()">
-            <button onclick="submitAnswer()">Lås upp 🔓</button>
+            <button id="submitBtn" onclick="submitAnswer()">Lås upp 🔓</button>
             <button id="skipBtn" class="btn-warning" style="margin-top: 10px;" onclick="skipQuestion()" disabled>Hoppa över frågan (Efter 5 fel)</button>
         </div>
     </div>
@@ -175,6 +176,7 @@
         let isMinigameActive = false;
         
         window.lastQuestionIndex = -1;
+        window.isCooldown = false; // NYTT: Håller koll på om laget har cooldown
 
         function showToast(msg, type = "error") {
             const toast = document.getElementById('toastMessage');
@@ -259,11 +261,20 @@
 
             const tData = roomData.teamData[myTeamId];
             
+            // --- NY LOGIK FÖR COOLDOWN ---
             if (window.lastQuestionIndex !== -1 && tData.currentQuestionIndex > window.lastQuestionIndex) {
                 const qBox = document.getElementById('qBox');
                 qBox.classList.remove('animate-success');
                 void qBox.offsetWidth;
                 qBox.classList.add('animate-success');
+
+                // Starta cooldown när vi märker att databasen har bytt fråga
+                window.isCooldown = true;
+                setTimeout(() => {
+                    window.isCooldown = false;
+                    renderGameUI(); // Tvinga omritning när cooldown släpper
+                    setTimeout(() => document.getElementById('answerInput').focus(), 100);
+                }, 2500); // 2.5 sekunder cooldown
             }
             window.lastQuestionIndex = tData.currentQuestionIndex;
 
@@ -295,22 +306,42 @@
             const potentialPoints = Math.max(10, Math.floor(100 * Math.pow(0.9, tData.wrongGuesses)));
             document.getElementById('potentialPointsDisplay').innerText = potentialPoints;
 
-            document.getElementById('skipBtn').disabled = tData.wrongGuesses < 5;
+            // --- TILLÄMPA COOLDOWN PÅ UI:T ---
+            const inputEl = document.getElementById('answerInput');
+            const submitBtn = document.getElementById('submitBtn');
+            const skipBtn = document.getElementById('skipBtn');
+
+            if (window.isCooldown) {
+                inputEl.disabled = true;
+                submitBtn.disabled = true;
+                skipBtn.disabled = true;
+                inputEl.value = '';
+                inputEl.placeholder = "Snyggt! Laddar nästa fråga...";
+            } else {
+                inputEl.disabled = false;
+                submitBtn.disabled = false;
+                skipBtn.disabled = tData.wrongGuesses < 5;
+                inputEl.placeholder = "Skriv ert gemensamma svar här...";
+            }
 
             const myTeammates = allPlayersInRoom.filter(p => p.team === myTeamId).sort((a,b) => a.id.localeCompare(b.id));
             const myIndexInTeam = myTeammates.findIndex(p => p.id === window.playerId);
             const myClues = currentQ.clues.filter((clue, index) => index % myTeammates.length === myIndexInTeam);
             
             document.getElementById('cluesContainer').innerHTML = myClues.map(c => `<div class="clue-item">💡 ${c}</div>`).join('') || "<em>Du har inga ledtrådar för denna fråga. Lyssna på ditt lag!</em>";
-            
-            setTimeout(() => document.getElementById('answerInput').focus(), 100);
         }
 
         window.submitAnswer = async function() {
-            if(!myTeamId || !roomData) return;
+            // Avbryt om laget är i cooldown
+            if(!myTeamId || !roomData || window.isCooldown) return;
+            
             const inputEl = document.getElementById('answerInput');
             const answer = inputEl.value; 
             if(!answer.trim()) return;
+
+            // Lås genast min egen knapp så jag inte kan dubbelklicka under nätverksfördröjningen
+            inputEl.disabled = true;
+            document.getElementById('submitBtn').disabled = true;
 
             const tData = roomData.teamData[myTeamId];
             const pkg = roomData.package;
@@ -321,18 +352,15 @@
             const hashedGuess = hashAnswer(answer);
             let isCorrect = (hashedGuess === currentQ.answer);
 
-            // --- NY LOGIK FÖR ATT IGNORERA SUFFIX (%, kr, st etc.) ---
             if (!isCorrect) {
-                // Regex som letar efter en inledande siffra/tal (tillåter kommatecken och punkter, t.ex. "12,5")
                 const numberMatch = answer.trim().match(/^(\-?\d+(?:[.,]\d+)?)/);
                 if (numberMatch) {
-                    const numOnly = numberMatch[1]; // Ex: "12,5" dras ut från "12,5 kr"
+                    const numOnly = numberMatch[1]; 
                     if (hashAnswer(numOnly) === currentQ.answer) {
-                        isCorrect = true; // Svaret blev rätt efter att vi skalade bort suffixet!
+                        isCorrect = true; 
                     }
                 }
             }
-            // ---------------------------------------------------------
 
             if (isCorrect) {
                 showToast("Rätt svar! Snyggt jobbat!", "info"); 
@@ -358,11 +386,16 @@
             } else {
                 showToast("Tyvärr, det var fel. Försök igen!", "warning");
                 await updateDoc(doc(db, "rooms", window.currentRoomCode), { [`teamData.${myTeamId}.wrongGuesses`]: tData.wrongGuesses + 1 });
+                
+                // Lås upp UI:t igen om man svarade fel
+                inputEl.disabled = false;
+                document.getElementById('submitBtn').disabled = false;
+                inputEl.focus();
             }
         }
 
         window.skipQuestion = async function() {
-            if(!myTeamId || !roomData) return;
+            if(!myTeamId || !roomData || window.isCooldown) return;
             const tData = roomData.teamData[myTeamId];
             await updateDoc(doc(db, "rooms", window.currentRoomCode), {
                 [`teamData.${myTeamId}.currentQuestionIndex`]: tData.currentQuestionIndex + 1,
