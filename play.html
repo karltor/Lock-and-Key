@@ -45,7 +45,6 @@
         .status-badge { padding: 10px 20px; border-radius: 20px; font-weight: bold; margin-bottom: 20px; display: inline-block; font-size: 1.1rem; transition: all 0.3s; color: var(--text-main); border: 2px solid transparent; }
         .status-badge.waiting { background: #e2e8f0; }
 
-        /* NY CSS: LAGKAMRATER I VÄNTRUMMET */
         .teammates-box { background: white; padding: 15px; border-radius: var(--border-radius); box-shadow: 0 2px 4px rgba(0,0,0,0.05); width: 100%; margin-bottom: 20px; display: none; }
         .teammates-title { font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; font-weight: bold; text-align: center; }
         .teammate-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
@@ -72,7 +71,6 @@
         .points-info { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px; }
         .points-info strong { color: var(--success); }
 
-        /* ANIMATION NÄR MAN KLARAT EN FRÅGA */
         @keyframes questionSuccess {
             0% { transform: scale(1); background-color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
             30% { transform: scale(1.02); background-color: #dcfce7; box-shadow: 0 10px 25px rgba(34, 197, 94, 0.4); }
@@ -221,7 +219,6 @@
             if (window.currentRoomCode && window.playerId) deleteDoc(doc(db, "rooms", window.currentRoomCode, "players", window.playerId));
         });
 
-        // UPPDATERAD listenToGame MED KOD FÖR LAGKAMRATER
         function listenToGame(roomCode) {
             onSnapshot(collection(db, "rooms", roomCode, "players"), (snap) => {
                 allPlayersInRoom = [];
@@ -347,9 +344,24 @@
 
             const myTeammates = allPlayersInRoom.filter(p => p.team === myTeamId).sort((a,b) => a.id.localeCompare(b.id));
             const myIndexInTeam = myTeammates.findIndex(p => p.id === window.playerId);
-            const myClues = currentQ.clues.filter((clue, index) => index % myTeammates.length === myIndexInTeam);
             
-            document.getElementById('cluesContainer').innerHTML = myClues.map(c => `<div class="clue-item">💡 ${c}</div>`).join('') || "<em>Du har inga ledtrådar för denna fråga. Lyssna på ditt lag!</em>";
+            // Hämta spelarens standardledtrådar
+            const myClues = currentQ.clues.filter((clue, index) => index % myTeammates.length === myIndexInTeam);
+
+            // Hämta spelarens upplåsta bonusledtrådar (baserat på felgissningar)
+            const allBonusClues = currentQ.bonusClues || [];
+            const unlockedBonusClues = allBonusClues.slice(0, tData.wrongGuesses); 
+            const myBonusClues = unlockedBonusClues.filter((clue, index) => index % myTeammates.length === myIndexInTeam);
+
+            // Bygg ihop HTML:en
+            let cluesHtml = myClues.map(c => `<div class="clue-item">💡 ${c}</div>`).join('');
+
+            if (myBonusClues.length > 0) {
+                cluesHtml += `<div style="margin-top: 15px; font-size: 0.85rem; color: var(--warning); font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">⭐ Ny ledtråd upplåst!</div>`;
+                cluesHtml += myBonusClues.map(c => `<div class="clue-item" style="border-left-color: var(--warning); background: #fffbeb; color: #92400e;">⭐ ${c}</div>`).join('');
+            }
+
+            document.getElementById('cluesContainer').innerHTML = cluesHtml || "<em>Du har inga ledtrådar för denna fråga. Lyssna på ditt lag!</em>";
         }
 
         window.submitAnswer = async function() {
@@ -391,7 +403,6 @@
                         const generator = new Function(pkg.generatorCode);
                         let newQ = null;
                         
-                        // Jämför nygenererade frågor mot befintliga
                         for (let i = 0; i < 50; i++) {
                             const tempQ = generator();
                             const exists = pkg.questions.some(q => q.question === tempQ.question);
@@ -400,11 +411,11 @@
                                 break;
                             }
                         }
-                        if (!newQ) newQ = generator(); // Fallback
+                        if (!newQ) newQ = generator(); 
 
                         if (newQ && newQ.question && newQ.answer && newQ.clues) {
                             newQ.answer = hashAnswer(newQ.answer);
-                            newQ._uid = Date.now().toString() + Math.random().toString(36); // Dubbelt skydd
+                            newQ._uid = Date.now().toString() + Math.random().toString(36); 
                             await updateDoc(doc(db, "rooms", window.currentRoomCode), { "package.questions": arrayUnion(newQ) });
                         }
                     } catch (e) { console.error("Gen fel", e); }
@@ -436,7 +447,6 @@
                     const generator = new Function(pkg.generatorCode);
                     let newQ = null;
                     
-                    // Samma unika verifiering här för Skip-knappen
                     for (let i = 0; i < 50; i++) {
                         const tempQ = generator();
                         const exists = pkg.questions.some(q => q.question === tempQ.question);
