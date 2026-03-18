@@ -170,6 +170,16 @@
             return hash.toString();
         }
 
+        // --- NY POÄNGBERÄKNING ---
+        // -20% (0.8) om gissningen låser upp en bonusledtråd.
+        // -10% (0.9) därefter.
+        window.calculatePoints = function(wrongGuesses, totalBonusClues) {
+            let penalty20 = Math.min(wrongGuesses, totalBonusClues);
+            let penalty10 = Math.max(0, wrongGuesses - totalBonusClues);
+            let points = 100 * Math.pow(0.8, penalty20) * Math.pow(0.9, penalty10);
+            return Math.max(10, Math.floor(points)); // Minst 10 poäng alltid
+        }
+
         // Global funktion för popup-effekt vid fel svar
         function showWrongAnswerPopup(pointsLost, unlockedBonus) {
             const popup = document.createElement('div');
@@ -333,6 +343,14 @@
             if(!myTeamId || !roomData || !roomData.teamData[myTeamId]) return;
 
             const tData = roomData.teamData[myTeamId];
+            const pkg = roomData.package;
+            
+            let currentQ = null;
+            let totalBonus = 0;
+            if (tData.currentQuestionIndex < pkg.questions.length) {
+                currentQ = pkg.questions[tData.currentQuestionIndex];
+                totalBonus = (currentQ.bonusClues) ? currentQ.bonusClues.length : 0;
+            }
             
             // Kolla om vi har bytt fråga = success animation
             if (window.lastQuestionIndex !== -1 && tData.currentQuestionIndex > window.lastQuestionIndex) {
@@ -356,12 +374,10 @@
             if (window.lastWrongGuesses === null) {
                 window.lastWrongGuesses = tData.wrongGuesses; // Initial laddning, trigga inte popup
             } else if (tData.wrongGuesses > window.lastWrongGuesses) {
-                const prevPoints = Math.max(10, Math.floor(100 * Math.pow(0.9, window.lastWrongGuesses)));
-                const newPoints = Math.max(10, Math.floor(100 * Math.pow(0.9, tData.wrongGuesses)));
+                const prevPoints = window.calculatePoints(window.lastWrongGuesses, totalBonus);
+                const newPoints = window.calculatePoints(tData.wrongGuesses, totalBonus);
                 const lost = prevPoints - newPoints;
                 
-                const pkg = roomData.package;
-                const currentQ = pkg.questions[tData.currentQuestionIndex];
                 const hasBonus = currentQ && currentQ.bonusClues && tData.wrongGuesses <= currentQ.bonusClues.length;
                 
                 showWrongAnswerPopup(lost, hasBonus);
@@ -382,7 +398,6 @@
                 setTimeout(() => document.body.classList.remove('flash-penalty'), 1000);
             }
 
-            const pkg = roomData.package;
             if (tData.currentQuestionIndex >= pkg.questions.length) {
                 document.getElementById('questionText').innerText = "Grymt jobbat! Ni väntar på fler frågor...";
                 document.getElementById('cluesContainer').innerHTML = "";
@@ -390,10 +405,9 @@
                 return;
             }
 
-            const currentQ = pkg.questions[tData.currentQuestionIndex];
             document.getElementById('questionText').innerText = currentQ.question;
 
-            const potentialPoints = Math.max(10, Math.floor(100 * Math.pow(0.9, tData.wrongGuesses)));
+            const potentialPoints = window.calculatePoints(tData.wrongGuesses, totalBonus);
             document.getElementById('potentialPointsDisplay').innerText = potentialPoints;
 
             const inputEl = document.getElementById('answerInput');
@@ -462,6 +476,7 @@
             const tData = roomData.teamData[myTeamId];
             const pkg = roomData.package;
             const currentQ = pkg.questions[tData.currentQuestionIndex];
+            const totalBonus = (currentQ.bonusClues) ? currentQ.bonusClues.length : 0;
             
             inputEl.value = ''; 
 
@@ -480,7 +495,7 @@
 
             if (isCorrect) {
                 showToast("Rätt svar! Snyggt jobbat!", "info"); 
-                const potentialPoints = Math.max(10, Math.floor(100 * Math.pow(0.9, tData.wrongGuesses)));
+                const potentialPoints = window.calculatePoints(tData.wrongGuesses, totalBonus);
                 let nextIndex = tData.currentQuestionIndex + 1;
                 
                 if (nextIndex >= pkg.questions.length && pkg.isAdvanced) {
