@@ -1,0 +1,136 @@
+{
+  "title": "Geografisk problemlösning: Världens länder",
+  "isAdvanced": false,
+  "questions": [
+    {
+      "question": "Vilket land söker vi?",
+      "answer": "Paraguay",
+      "clues": [
+        "Landet ligger i Sydamerika.",
+        "Nationen förklarade sig självständig år 1811.",
+        "Geografiskt sett saknar landet helt havskust."
+      ],
+      "bonusClues": [
+        "Det är ett av endast två länder i Sydamerika utan kust (det andra är Bolivia).",
+        "Huvudstaden heter Asunción."
+      ]
+    },
+    {
+      "question": "Vilket land söker vi?",
+      "answer": "Kanada",
+      "clues": [
+        "Landet ligger geografiskt i Nordamerika.",
+        "Statskicket är en monarki.",
+        "Landet har landgräns till exakt ett enda annat land."
+      ],
+      "bonusClues": [
+        "Landet är till ytan världens näst största land.",
+        "Huvudstaden heter Ottawa och flaggan har ett rött lönnlöv."
+      ]
+    },
+    {
+      "question": "Vilket land söker vi?",
+      "answer": "Irland",
+      "clues": [
+        "Detta är en ö-nation belägen i Europa.",
+        "Statskicket är en republik.",
+        "Landet har landgräns till exakt ett enda annat land."
+      ],
+      "bonusClues": [
+        "Landet gränsar endast till Storbritannien (via Nordirland).",
+        "Huvudstaden heter Dublin och landet förknippas ofta med en grön treklöver."
+      ]
+    },
+    {
+      "question": "Vilket land söker vi?",
+      "answer": "Marocko",
+      "clues": [
+        "Landet ligger på den afrikanska kontinenten.",
+        "Landets statskick är en monarki.",
+        "Landet har kust mot Medelhavet."
+      ],
+      "bonusClues": [
+        "Landet gränsar även till Atlanten i väster och Algeriet i öster.",
+        "Huvudstaden heter Rabat, men Casablanca är landets största stad."
+      ]
+    },
+    {
+      "question": "Vilket land söker vi?",
+      "answer": "Kenya",
+      "clues": [
+        "Ekvatorn passerar rakt igenom detta land.",
+        "Landet har kustlinje mot Indiska oceanen.",
+        "Engelska är ett av landets officiella språk."
+      ],
+      "bonusClues": [
+        "Här finns kända naturreservat som Masai Mara.",
+        "Huvudstaden heter Nairobi."
+      ]
+    },
+    {
+      "question": "Vilket land söker vi?",
+      "answer": "Chile",
+      "clues": [
+        "Landet är beläget i Sydamerika.",
+        "Hela kustlinjen vetter mot Stilla havet.",
+        "Landet delar landgräns med exakt tre andra länder."
+      ],
+      "bonusClues": [
+        "Geografiskt sett är landet extremt långsmalt.",
+        "Huvudstaden heter Santiago."
+      ]
+    },
+    {
+      "question": "Vilket land söker vi?",
+      "answer": "Belgien",
+      "clues": [
+        "Landet ligger i Europa.",
+        "Statskicket är en monarki.",
+        "Landet delar landgräns med exakt fyra andra länder."
+      ],
+      "bonusClues": [
+        "Landet är känt för sin choklad, sina våfflor och som EU:s inofficiella huvudstad.",
+        "Huvudstaden heter Bryssel."
+      ]
+    },
+    {
+      "question": "Vilket land söker vi?",
+      "answer": "Jordanien",
+      "clues": [
+        "Landet ligger geografiskt i Asien.",
+        "Nationen styrs som en monarki.",
+        "Landet har landgräns mot exakt fem andra länder/territorier."
+      ],
+      "bonusClues": [
+        "I detta land finns den berömda antika klippstaden Petra.",
+        "Huvudstaden heter Amman."
+      ]
+    },
+    {
+      "question": "Vilket land söker vi?",
+      "answer": "Uruguay",
+      "clues": [
+        "Landet ligger i Sydamerika.",
+        "Landet har landgräns till exakt två andra länder.",
+        "Landets kustlinje vetter uteslutande mot Atlanten."
+      ],
+      "bonusClues": [
+        "De två grannländerna är Argentina och Brasilien.",
+        "Landet vann det allra första Världsmästerskapet i fotboll år 1930."
+      ]
+    },
+    {
+      "question": "Vilket land söker vi?",
+      "answer": "Sverige",
+      "clues": [
+        "Landet har en kustlinje mot Östersjön.",
+        "Landet styrs formellt som en monarki.",
+        "Landet delar landgräns med exakt två andra länder."
+      ],
+      "bonusClues": [
+        "De två grannländerna är Norge och Finland.",
+        "Huvudstaden heter Stockholm."
+      ]
+    }
+  ]
+}
