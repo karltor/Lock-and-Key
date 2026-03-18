@@ -44,6 +44,12 @@
         .player-greeting { font-size: 1.2rem; font-weight: bold; margin-bottom: 15px; color: var(--text-main); }
         .status-badge { padding: 10px 20px; border-radius: 20px; font-weight: bold; margin-bottom: 20px; display: inline-block; font-size: 1.1rem; transition: all 0.3s; color: var(--text-main); border: 2px solid transparent; }
         .status-badge.waiting { background: #e2e8f0; }
+
+        /* NY CSS: LAGKAMRATER I VÄNTRUMMET */
+        .teammates-box { background: white; padding: 15px; border-radius: var(--border-radius); box-shadow: 0 2px 4px rgba(0,0,0,0.05); width: 100%; margin-bottom: 20px; display: none; }
+        .teammates-title { font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; font-weight: bold; text-align: center; }
+        .teammate-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+        .teammate-badge { background: #f8fafc; padding: 6px 12px; border-radius: 15px; font-size: 0.95rem; font-weight: 600; color: var(--text-main); border: 1px solid var(--border); }
         
         .minigame-container { background: white; padding: 20px; border-radius: var(--border-radius); box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center; width: 100%; }
         .score-board { display: flex; justify-content: space-around; margin-top: 10px; font-weight: bold; }
@@ -90,6 +96,11 @@
     <div id="waitingScreen">
         <div class="player-greeting" id="greetingName">Välkommen!</div>
         <div class="status-badge waiting" id="playerStatus">Väntar på lagindelning... 👀</div>
+        
+        <div class="teammates-box" id="teammatesBox">
+            <div class="teammates-title">I ditt lag:</div>
+            <div class="teammate-list" id="teammatesList"></div>
+        </div>
         
         <div class="minigame-container">
             <h3>Låsdyrkaren</h3>
@@ -210,6 +221,7 @@
             if (window.currentRoomCode && window.playerId) deleteDoc(doc(db, "rooms", window.currentRoomCode, "players", window.playerId));
         });
 
+        // UPPDATERAD listenToGame MED KOD FÖR LAGKAMRATER
         function listenToGame(roomCode) {
             onSnapshot(collection(db, "rooms", roomCode, "players"), (snap) => {
                 allPlayersInRoom = [];
@@ -227,14 +239,26 @@
                 myTeamId = me.team;
                 
                 const statusEl = document.getElementById('playerStatus');
+                const teammatesBox = document.getElementById('teammatesBox');
+                const teammatesList = document.getElementById('teammatesList');
+
                 if (myTeamId) {
                     statusEl.innerHTML = `✅ Lag: <strong>${getTeamName(myTeamId)}</strong>`;
                     statusEl.style.backgroundColor = getTeamColor(myTeamId);
                     statusEl.style.boxShadow = `0 4px 10px ${getTeamColor(myTeamId)}88`;
+
+                    const myTeammates = allPlayersInRoom.filter(p => p.team === myTeamId);
+                    
+                    teammatesBox.style.display = 'block';
+                    teammatesList.innerHTML = myTeammates.map(p => {
+                        const isMe = p.id === window.playerId ? ' (Du)' : '';
+                        return `<div class="teammate-badge">${p.name}${isMe}</div>`;
+                    }).join('');
                 } else {
                     statusEl.innerHTML = `Väntar på lagindelning... 👀`;
                     statusEl.style.backgroundColor = '#e2e8f0';
                     statusEl.style.boxShadow = 'none';
+                    teammatesBox.style.display = 'none';
                 }
 
                 if(roomData && roomData.status === 'playing') renderGameUI();
