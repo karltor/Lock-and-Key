@@ -37,7 +37,7 @@
         .error-msg { color: var(--danger); font-size: 0.9rem; margin-top: 10px; font-weight: 600; min-height: 20px; }
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--danger); color: white; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 1000; font-weight: bold; display: none; }
         .toast.warning { background: var(--warning); }
-        .toast.info { background: var(--success); } /* Ändrade till grön för rätt svar, kändes rimligt! */
+        .toast.info { background: var(--success); }
 
         /* VÄNTRUM & MINISPEL */
         #waitingScreen { display: none; width: 100%; max-width: 500px; flex-direction: column; align-items: center; }
@@ -176,7 +176,7 @@
         let isMinigameActive = false;
         
         window.lastQuestionIndex = -1;
-        window.isCooldown = false; // NYTT: Håller koll på om laget har cooldown
+        window.isCooldown = false;
 
         function showToast(msg, type = "error") {
             const toast = document.getElementById('toastMessage');
@@ -261,20 +261,18 @@
 
             const tData = roomData.teamData[myTeamId];
             
-            // --- NY LOGIK FÖR COOLDOWN ---
             if (window.lastQuestionIndex !== -1 && tData.currentQuestionIndex > window.lastQuestionIndex) {
                 const qBox = document.getElementById('qBox');
                 qBox.classList.remove('animate-success');
                 void qBox.offsetWidth;
                 qBox.classList.add('animate-success');
 
-                // Starta cooldown när vi märker att databasen har bytt fråga
                 window.isCooldown = true;
                 setTimeout(() => {
                     window.isCooldown = false;
-                    renderGameUI(); // Tvinga omritning när cooldown släpper
+                    renderGameUI();
                     setTimeout(() => document.getElementById('answerInput').focus(), 100);
-                }, 2500); // 2.5 sekunder cooldown
+                }, 2500);
             }
             window.lastQuestionIndex = tData.currentQuestionIndex;
 
@@ -306,7 +304,6 @@
             const potentialPoints = Math.max(10, Math.floor(100 * Math.pow(0.9, tData.wrongGuesses)));
             document.getElementById('potentialPointsDisplay').innerText = potentialPoints;
 
-            // --- TILLÄMPA COOLDOWN PÅ UI:T ---
             const inputEl = document.getElementById('answerInput');
             const submitBtn = document.getElementById('submitBtn');
             const skipBtn = document.getElementById('skipBtn');
@@ -332,14 +329,12 @@
         }
 
         window.submitAnswer = async function() {
-            // Avbryt om laget är i cooldown
             if(!myTeamId || !roomData || window.isCooldown) return;
             
             const inputEl = document.getElementById('answerInput');
             const answer = inputEl.value; 
             if(!answer.trim()) return;
 
-            // Lås genast min egen knapp så jag inte kan dubbelklicka under nätverksfördröjningen
             inputEl.disabled = true;
             document.getElementById('submitBtn').disabled = true;
 
@@ -370,12 +365,25 @@
                 if (nextIndex >= pkg.questions.length && pkg.isAdvanced) {
                     try {
                         const generator = new Function(pkg.generatorCode);
-                        const newQ = generator();
+                        let newQ = null;
+                        
+                        // Jämför nygenererade frågor mot befintliga
+                        for (let i = 0; i < 50; i++) {
+                            const tempQ = generator();
+                            const exists = pkg.questions.some(q => q.question === tempQ.question);
+                            if (!exists) {
+                                newQ = tempQ;
+                                break;
+                            }
+                        }
+                        if (!newQ) newQ = generator(); // Fallback
+
                         if (newQ && newQ.question && newQ.answer && newQ.clues) {
                             newQ.answer = hashAnswer(newQ.answer);
+                            newQ._uid = Date.now().toString() + Math.random().toString(36); // Dubbelt skydd
                             await updateDoc(doc(db, "rooms", window.currentRoomCode), { "package.questions": arrayUnion(newQ) });
                         }
-                    } catch (e) { console.error("Gen fel"); }
+                    } catch (e) { console.error("Gen fel", e); }
                 }
 
                 await updateDoc(doc(db, "rooms", window.currentRoomCode), {
@@ -387,7 +395,6 @@
                 showToast("Tyvärr, det var fel. Försök igen!", "warning");
                 await updateDoc(doc(db, "rooms", window.currentRoomCode), { [`teamData.${myTeamId}.wrongGuesses`]: tData.wrongGuesses + 1 });
                 
-                // Lås upp UI:t igen om man svarade fel
                 inputEl.disabled = false;
                 document.getElementById('submitBtn').disabled = false;
                 inputEl.focus();
@@ -397,8 +404,35 @@
         window.skipQuestion = async function() {
             if(!myTeamId || !roomData || window.isCooldown) return;
             const tData = roomData.teamData[myTeamId];
+            const pkg = roomData.package;
+            let nextIndex = tData.currentQuestionIndex + 1;
+
+            if (nextIndex >= pkg.questions.length && pkg.isAdvanced) {
+                try {
+                    const generator = new Function(pkg.generatorCode);
+                    let newQ = null;
+                    
+                    // Samma unika verifiering här för Skip-knappen
+                    for (let i = 0; i < 50; i++) {
+                        const tempQ = generator();
+                        const exists = pkg.questions.some(q => q.question === tempQ.question);
+                        if (!exists) {
+                            newQ = tempQ;
+                            break;
+                        }
+                    }
+                    if (!newQ) newQ = generator();
+
+                    if (newQ && newQ.question && newQ.answer && newQ.clues) {
+                        newQ.answer = hashAnswer(newQ.answer);
+                        newQ._uid = Date.now().toString() + Math.random().toString(36);
+                        await updateDoc(doc(db, "rooms", window.currentRoomCode), { "package.questions": arrayUnion(newQ) });
+                    }
+                } catch (e) { console.error("Gen fel", e); }
+            }
+
             await updateDoc(doc(db, "rooms", window.currentRoomCode), {
-                [`teamData.${myTeamId}.currentQuestionIndex`]: tData.currentQuestionIndex + 1,
+                [`teamData.${myTeamId}.currentQuestionIndex`]: nextIndex,
                 [`teamData.${myTeamId}.wrongGuesses`]: 0
             });
             showToast("Ni hoppade över frågan.", "info");
