@@ -27,7 +27,7 @@
         .form-group label { display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 5px; color: var(--text-muted); }
         input[type="text"] { width: 100%; padding: 12px; border: 2px solid var(--border); border-radius: 6px; font-size: 1rem; outline: none; transition: border-color 0.2s; text-align: center;}
         input[type="text"]:focus { border-color: var(--primary); }
-        input[type="text"]:disabled { background-color: #e2e8f0; cursor: not-allowed; }
+        input[type="text"]:disabled { background-color: #e2e8f0; cursor: not-allowed; color: var(--text-muted); font-weight: bold; }
         
         button { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 1.1rem; font-weight: bold; color: white; background-color: var(--primary); transition: background 0.2s; margin-top: 10px; }
         button:hover:not(:disabled) { background-color: var(--primary-hover); }
@@ -38,6 +38,17 @@
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--danger); color: white; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 1000; font-weight: bold; display: none; }
         .toast.warning { background: var(--warning); }
         .toast.info { background: var(--success); }
+
+        /* NY POPUP ANIMATION FÖR FEL SVAR / BONUSLEDTRÅD */
+        .bonus-popup {
+            position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%) scale(0.8);
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white; padding: 25px 50px; border-radius: 16px; font-weight: bold; font-size: 1.6rem;
+            box-shadow: 0 10px 30px rgba(217, 119, 6, 0.4); z-index: 9999; text-align: center;
+            opacity: 0; pointer-events: none; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .bonus-popup.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        .bonus-popup.red { background: linear-gradient(135deg, #ef4444, #b91c1c); box-shadow: 0 10px 30px rgba(239, 68, 68, 0.4); }
 
         /* VÄNTRUM & MINISPEL */
         #waitingScreen { display: none; width: 100%; max-width: 500px; flex-direction: column; align-items: center; }
@@ -133,6 +144,22 @@
     </div>
 
     <script>
+        // Autofokus på rätt fält vid start + lås rumskodsfältet om det kom via URL
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentRoom = urlParams.get('room');
+            const roomInput = document.getElementById('roomInput');
+            const nameInput = document.getElementById('nameInput');
+            
+            if (currentRoom) {
+                roomInput.value = currentRoom.toUpperCase();
+                roomInput.disabled = true; // Låser fältet så elever inte råkar ändra det
+                nameInput.focus();
+            } else if (roomInput) {
+                roomInput.focus();
+            }
+        });
+
         function hashAnswer(str) {
             let hash = 0; let s = str.toString().trim().toLowerCase();
             for (let i = 0; i < s.length; i++) {
@@ -141,6 +168,34 @@
                 hash = hash & hash;
             }
             return hash.toString();
+        }
+
+        // Global funktion för popup-effekt vid fel svar
+        function showWrongAnswerPopup(pointsLost, unlockedBonus) {
+            const popup = document.createElement('div');
+            popup.className = 'bonus-popup show';
+            
+            if (unlockedBonus) {
+                popup.innerHTML = '⭐ Ny ledtråd!';
+                document.body.appendChild(popup);
+                // Efter 1.5 sekunder övergår guld -> rött
+                setTimeout(() => {
+                    popup.classList.add('red');
+                    popup.innerHTML = `Fel svar!<br><span style="font-size: 1.2rem;">-${pointsLost} poäng</span>`;
+                    setTimeout(() => {
+                        popup.classList.remove('show');
+                        setTimeout(() => popup.remove(), 400);
+                    }, 2000);
+                }, 1500);
+            } else {
+                popup.classList.add('red');
+                popup.innerHTML = `Fel svar!<br><span style="font-size: 1.2rem;">-${pointsLost} poäng</span>`;
+                document.body.appendChild(popup);
+                setTimeout(() => {
+                    popup.classList.remove('show');
+                    setTimeout(() => popup.remove(), 400);
+                }, 2000);
+            }
         }
     </script>
 
@@ -171,10 +226,6 @@
         }
         function getTeamColor(index) { return TEAM_COLORS[(index - 1) % TEAM_COLORS.length]; }
 
-        const urlParams = new URLSearchParams(window.location.search);
-        let currentRoom = urlParams.get('room');
-        if (currentRoom) document.getElementById('roomInput').value = currentRoom.toUpperCase();
-
         window.playerId = localStorage.getItem('lockAndKey_playerId') || 'student_' + Date.now() + Math.random().toString(36).substr(2, 5);
         window.currentRoomCode = null;
         
@@ -185,6 +236,7 @@
         let isMinigameActive = false;
         
         window.lastQuestionIndex = -1;
+        window.lastWrongGuesses = null; 
         window.isCooldown = false;
 
         function showToast(msg, type = "error") {
@@ -282,11 +334,14 @@
 
             const tData = roomData.teamData[myTeamId];
             
+            // Kolla om vi har bytt fråga = success animation
             if (window.lastQuestionIndex !== -1 && tData.currentQuestionIndex > window.lastQuestionIndex) {
                 const qBox = document.getElementById('qBox');
                 qBox.classList.remove('animate-success');
                 void qBox.offsetWidth;
                 qBox.classList.add('animate-success');
+
+                window.lastWrongGuesses = 0; // Nollställ gissnings-räknaren för nya frågan
 
                 window.isCooldown = true;
                 setTimeout(() => {
@@ -296,6 +351,22 @@
                 }, 2500);
             }
             window.lastQuestionIndex = tData.currentQuestionIndex;
+
+            // Kolla om laget svarat fel = trigga popup
+            if (window.lastWrongGuesses === null) {
+                window.lastWrongGuesses = tData.wrongGuesses; // Initial laddning, trigga inte popup
+            } else if (tData.wrongGuesses > window.lastWrongGuesses) {
+                const prevPoints = Math.max(10, Math.floor(100 * Math.pow(0.9, window.lastWrongGuesses)));
+                const newPoints = Math.max(10, Math.floor(100 * Math.pow(0.9, tData.wrongGuesses)));
+                const lost = prevPoints - newPoints;
+                
+                const pkg = roomData.package;
+                const currentQ = pkg.questions[tData.currentQuestionIndex];
+                const hasBonus = currentQ && currentQ.bonusClues && tData.wrongGuesses <= currentQ.bonusClues.length;
+                
+                showWrongAnswerPopup(lost, hasBonus);
+                window.lastWrongGuesses = tData.wrongGuesses;
+            }
 
             const nameEl = document.getElementById('teamNameDisplay');
             nameEl.innerText = getTeamName(myTeamId);
@@ -342,23 +413,37 @@
                 inputEl.placeholder = "Skriv ert gemensamma svar här...";
             }
 
+            // --- FÖRDELNING AV LEDTRÅDAR ---
             const myTeammates = allPlayersInRoom.filter(p => p.team === myTeamId).sort((a,b) => a.id.localeCompare(b.id));
             const myIndexInTeam = myTeammates.findIndex(p => p.id === window.playerId);
             
-            // Hämta spelarens standardledtrådar
-            const myClues = currentQ.clues.filter((clue, index) => index % myTeammates.length === myIndexInTeam);
+            let myAssignedClues = [];
+            let myAssignedBonusClues = [];
+            
+            // Vi använder question index för att rotera vem som börjar få första ledtråden på varje fråga
+            let playerTurn = tData.currentQuestionIndex % myTeammates.length;
 
-            // Hämta spelarens upplåsta bonusledtrådar (baserat på felgissningar)
+            // Fördela standardledtrådar jämnt, skicka turn-pekaren vidare
+            currentQ.clues.forEach((c) => {
+                if (playerTurn === myIndexInTeam) myAssignedClues.push(c);
+                playerTurn = (playerTurn + 1) % myTeammates.length;
+            });
+
+            // Fördela bonusledtrådar med start hos den som har färst (dvs där pekaren stannade)
             const allBonusClues = currentQ.bonusClues || [];
-            const unlockedBonusClues = allBonusClues.slice(0, tData.wrongGuesses); 
-            const myBonusClues = unlockedBonusClues.filter((clue, index) => index % myTeammates.length === myIndexInTeam);
+            const unlockedBonusClues = allBonusClues.slice(0, tData.wrongGuesses);
+
+            unlockedBonusClues.forEach((bc) => {
+                if (playerTurn === myIndexInTeam) myAssignedBonusClues.push(bc);
+                playerTurn = (playerTurn + 1) % myTeammates.length;
+            });
 
             // Bygg ihop HTML:en
-            let cluesHtml = myClues.map(c => `<div class="clue-item">💡 ${c}</div>`).join('');
-
-            if (myBonusClues.length > 0) {
-                cluesHtml += `<div style="margin-top: 15px; font-size: 0.85rem; color: var(--warning); font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">⭐ Ny ledtråd upplåst!</div>`;
-                cluesHtml += myBonusClues.map(c => `<div class="clue-item" style="border-left-color: var(--warning); background: #fffbeb; color: #92400e;">⭐ ${c}</div>`).join('');
+            let cluesHtml = myAssignedClues.map(c => `<div class="clue-item">💡 ${c}</div>`).join('');
+            
+            // Lägg bonusledtråden diskret nedanför de andra men med guld/varnings-tema
+            if (myAssignedBonusClues.length > 0) {
+                cluesHtml += myAssignedBonusClues.map(c => `<div class="clue-item" style="border-left-color: var(--warning); background: #fffbeb; color: #92400e; margin-top: 10px;">⭐ ${c}</div>`).join('');
             }
 
             document.getElementById('cluesContainer').innerHTML = cluesHtml || "<em>Du har inga ledtrådar för denna fråga. Lyssna på ditt lag!</em>";
@@ -427,7 +512,7 @@
                     [`teamData.${myTeamId}.wrongGuesses`]: 0
                 });
             } else {
-                showToast("Tyvärr, det var fel. Försök igen!", "warning");
+                // Skickar bara in poängen i databasen - renderGameUI kommer fånga upp förändringen och trigga popupen!
                 await updateDoc(doc(db, "rooms", window.currentRoomCode), { [`teamData.${myTeamId}.wrongGuesses`]: tData.wrongGuesses + 1 });
                 
                 inputEl.disabled = false;
