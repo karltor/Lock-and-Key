@@ -2,7 +2,7 @@
 <html lang="sv">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://firebase.googleapis.com;">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://firebase.googleapis.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com;">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lock and Key - Lärarpanel</title>
     <style>
@@ -280,7 +280,8 @@
 
     <script type="module">
         import { doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-        import { db } from './firebase.js';
+        import { db, ensureAuth } from './firebase.js';
+        import { boardContentHash } from './shared.js';
 
         // --- App State ---
         window.packages = JSON.parse(localStorage.getItem('lockAndKeyPackages')) || [];
@@ -336,7 +337,8 @@ return {
         });
 
         // --- App Logik ---
-        window.init = async function() { 
+        window.init = async function() {
+            await ensureAuth();
             const hasInitialized = localStorage.getItem('lockAndKey_initialized');
             if (!hasInitialized) {
                 const defaultFiles = ['algebraiska%20problem.json', 'geografi.json'];
@@ -373,19 +375,21 @@ return {
         window.checkSharedLink = async function() {
             const urlParams = new URLSearchParams(window.location.search);
             const shareId = urlParams.get('share');
-            
+
             if (shareId) {
                 window.showToast("Hämtar delat paket...", "info");
                 try {
-                    const docRef = doc(db, "shared_packages", shareId);
+                    const docRef = doc(db, "boards", shareId);
                     const docSnap = await getDoc(docRef);
-                    
+
                     if (docSnap.exists()) {
                         const sharedPkg = docSnap.data();
-                        sharedPkg.id = Date.now(); // Ge det ett eget nytt ID lokalt
+                        sharedPkg.id = Date.now();
+                        delete sharedPkg.creatorUid;
+                        delete sharedPkg.createdAt;
                         window.packages.push(sharedPkg);
                         localStorage.setItem('lockAndKeyPackages', JSON.stringify(window.packages));
-                        
+
                         window.showToast(`Paketet "${sharedPkg.title}" har lagts till!`, "success");
                         window.selectPackage(window.packages.length - 1);
                     } else {
@@ -416,21 +420,31 @@ return {
             const originalText = btn.innerHTML;
             btn.innerHTML = "Skapar länk...";
             btn.disabled = true;
-            
+
             try {
-                const shareId = Math.random().toString(36).substring(2, 10);
-                const exportData = { 
-                    title: window.packageToShare.title, 
-                    questions: window.packageToShare.questions, 
-                    isAdvanced: window.packageToShare.isAdvanced, 
-                    generatorCode: window.packageToShare.generatorCode 
+                const uid = await ensureAuth();
+                const exportData = {
+                    title: window.packageToShare.title,
+                    questions: window.packageToShare.questions,
+                    isAdvanced: window.packageToShare.isAdvanced,
+                    generatorCode: window.packageToShare.generatorCode
                 };
-                
-                await setDoc(doc(db, "shared_packages", shareId), exportData);
-                
+
+                // Content-based ID: identical boards share the same ID (dedup)
+                const boardId = await boardContentHash(exportData);
+
+                const existingDoc = await getDoc(doc(db, "boards", boardId));
+                if (!existingDoc.exists()) {
+                    await setDoc(doc(db, "boards", boardId), {
+                        ...exportData,
+                        creatorUid: uid,
+                        createdAt: new Date()
+                    });
+                }
+
                 const basePath = window.location.pathname;
-                const link = `${window.location.origin}${basePath}?share=${shareId}`;
-                
+                const link = `${window.location.origin}${basePath}?share=${boardId}`;
+
                 await navigator.clipboard.writeText(link);
                 window.showToast("Länken kopierades till urklipp!", "success");
                 window.closeShareModal();
@@ -805,12 +819,36 @@ return {
             });
         }
 
-        window.playPackagePlaceholder = function(index) {
+        window.playPackagePlaceholder = async function(index) {
             if (index === undefined || !window.packages[index]) return;
             const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
-            const hostToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
-            localStorage.setItem('lockAndKey_pendingRoom', JSON.stringify({ roomCode: roomCode, hostToken: hostToken, package: window.packages[index] }));
-            localStorage.setItem('lockAndKey_hostToken_' + roomCode, hostToken);
+            const pkg = window.packages[index];
+
+            localStorage.setItem('lockAndKey_pendingRoom', JSON.stringify({ roomCode: roomCode, package: pkg }));
+
+            // Also upload board to boards collection (dedup)
+            try {
+                const uid = await ensureAuth();
+                const exportData = {
+                    title: pkg.title,
+                    questions: pkg.questions,
+                    isAdvanced: pkg.isAdvanced,
+                    generatorCode: pkg.generatorCode
+                };
+                const boardId = await boardContentHash(exportData);
+                const existingDoc = await getDoc(doc(db, "boards", boardId));
+                if (!existingDoc.exists()) {
+                    await setDoc(doc(db, "boards", boardId), {
+                        ...exportData,
+                        creatorUid: uid,
+                        createdAt: new Date()
+                    });
+                }
+            } catch (e) {
+                // Board upload is best-effort, don't block game start
+                console.warn("Could not upload board:", e);
+            }
+
             window.location.href = `host.html?room=${roomCode}`;
         }
 
