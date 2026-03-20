@@ -21,7 +21,7 @@ export function calculatePoints(wrongGuesses, totalBonusClues) {
     return Math.max(10, Math.floor(p));
 }
 
-// Enkel hash för att dölja rätta svar i databasen
+// Enkel hash (DEPRECATED - använd hashAnswerSecure istället)
 export function hashAnswer(str) {
     let hash = 0;
     const s = str.toString().trim().toLowerCase();
@@ -31,4 +31,29 @@ export function hashAnswer(str) {
         hash = hash & hash;
     }
     return hash.toString();
+}
+
+// Säker SHA-256 hash med salt – omöjlig att vända
+export async function hashAnswerSecure(str, salt = '') {
+    const s = salt + str.toString().trim().toLowerCase();
+    const data = new TextEncoder().encode(s);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Deterministisk innehållshash för bräden (för deduplicering)
+export async function boardContentHash(boardData) {
+    const normalized = JSON.stringify({
+        t: boardData.title,
+        q: boardData.questions.map(q => ({
+            q: q.question, a: q.answer, c: q.clues, b: q.bonusClues || []
+        })),
+        a: !!boardData.isAdvanced,
+        g: boardData.generatorCode || ''
+    });
+    const data = new TextEncoder().encode(normalized);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
 }

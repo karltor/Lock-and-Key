@@ -146,42 +146,46 @@
     </div>
 
     <script type="module">
-        import { doc, setDoc, collection, onSnapshot, updateDoc, deleteDoc, writeBatch, getDocs, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-        import { db } from './firebase.js';
-        import { getTeamName, getTeamColor, calculatePoints, hashAnswer } from './shared.js';
+        import { doc, setDoc, getDoc, collection, onSnapshot, updateDoc, deleteDoc, writeBatch, getDocs, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { db, ensureAuth } from './firebase.js';
+        import { getTeamName, getTeamColor, calculatePoints, hashAnswerSecure } from './shared.js';
 
         window.db = db;
         window.getTeamName = getTeamName;
         window.getTeamColor = getTeamColor;
 
         window.roomId = new URLSearchParams(window.location.search).get('room');
-        window.localToken = localStorage.getItem('lockAndKey_hostToken_' + window.roomId);
+        window.hostUid = null;
+        window.hostPackage = null; // Loaded from host_data (only host can read)
         window.players = [];
         window.numberOfTeams = 4;
         window.gameTimerInterval = null;
         window.roomData = null;
 
         async function initHost() {
-            if (!window.roomId || !window.localToken) {
-                showToast("Du saknar behörighet. Omdirigerar...", "error");
-                setTimeout(() => window.location.href = `play.html?room=${window.roomId || ''}`, 2000);
+            if (!window.roomId) {
+                showToast("Rumsid saknas.", "error");
                 return;
             }
 
+            const uid = await ensureAuth();
+            window.hostUid = uid;
+
             document.getElementById('roomCodeDisplay').innerText = `Rum: ${window.roomId}`;
 
+            // --- Create room if we have pending data from index.html ---
             const pendingDataStr = localStorage.getItem('lockAndKey_pendingRoom');
             if (pendingDataStr) {
                 const pendingData = JSON.parse(pendingDataStr);
-                if (!pendingData.package) {
-                    showToast("Fel: Frågepaketet saknas. Ladda om startsidan (Ctrl+F5).", "error");
-                    localStorage.removeItem('lockAndKey_pendingRoom'); 
-                    return;
-                }
-                
-                if (pendingData.roomCode === window.roomId && pendingData.hostToken === window.localToken) {
+                if (pendingData.roomCode === window.roomId) {
+                    if (!pendingData.package) {
+                        showToast("Fel: Frågepaketet saknas. Ladda om startsidan (Ctrl+F5).", "error");
+                        localStorage.removeItem('lockAndKey_pendingRoom');
+                        return;
+                    }
+
                     const safePackage = JSON.parse(JSON.stringify(pendingData.package));
-                    
+
                     if (safePackage.questions.length === 0 && safePackage.isAdvanced) {
                         try {
                             const generateFirstQuestion = new Function(safePackage.generatorCode);
@@ -195,57 +199,90 @@
                         }
                     }
 
-                    safePackage.questions.forEach(q => {
-                        q.answer = hashAnswer(q.answer);
+                    // Generate a per-room salt for SHA-256 answer hashing
+                    const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+                        .map(b => b.toString(16).padStart(2, '0')).join('');
+
+                    // Hash all answers with SHA-256 + salt (irreversible)
+                    for (let q of safePackage.questions) {
+                        q.answer = await hashAnswerSecure(q.answer, salt);
+                    }
+
+                    // Create room doc (hostUid = auth-based ownership)
+                    await setDoc(doc(window.db, "rooms", window.roomId), {
+                        hostUid: uid,
+                        status: "lobby",
+                        createdAt: new Date()
                     });
 
-                    await setDoc(doc(window.db, "rooms", window.roomId), { 
-                        hostToken: window.localToken, 
-                        status: "lobby", 
-                        package: safePackage, 
-                        createdAt: new Date() 
+                    // Store package in host-only subcollection (students CANNOT read this)
+                    await setDoc(doc(window.db, "rooms", window.roomId, "host_data", "package"), {
+                        questions: safePackage.questions,
+                        isAdvanced: safePackage.isAdvanced,
+                        generatorCode: safePackage.generatorCode || '',
+                        salt: salt
                     });
+
                     localStorage.removeItem('lockAndKey_pendingRoom');
                 }
             }
 
+            // --- Verify we are the host ---
+            const roomSnap = await getDoc(doc(window.db, "rooms", window.roomId));
+            if (!roomSnap.exists() || roomSnap.data().hostUid !== uid) {
+                showToast("Du saknar behörighet. Omdirigerar...", "error");
+                setTimeout(() => window.location.href = `play.html?room=${window.roomId}`, 2000);
+                return;
+            }
+
+            // --- Load package into memory (host-only) ---
+            const pkgSnap = await getDoc(doc(window.db, "rooms", window.roomId, "host_data", "package"));
+            if (pkgSnap.exists()) {
+                window.hostPackage = pkgSnap.data();
+            } else {
+                showToast("Fel: Frågepaketet saknas i databasen.", "error");
+                return;
+            }
+
             renderTeamsGrid();
 
+            // --- Listen to players ---
             onSnapshot(collection(window.db, "rooms", window.roomId, "players"), (snapshot) => {
-                window.players = []; 
+                window.players = [];
                 snapshot.forEach(doc => window.players.push({ id: doc.id, ...doc.data() }));
-                
-                if(document.getElementById('lobbyScreen').style.display !== 'none') { 
-                    renderAllPlayers(); 
-                    checkReadyToStart(); 
+
+                if(document.getElementById('lobbyScreen').style.display !== 'none') {
+                    renderAllPlayers();
+                    checkReadyToStart();
                 } else if (document.getElementById('gameScreen').style.display !== 'none') {
                     renderLeaderboard();
                 }
             });
 
+            // --- Listen to room status ---
             onSnapshot(doc(window.db, "rooms", window.roomId), (docSnap) => {
                 if(docSnap.exists()) {
                     window.roomData = docSnap.data();
                     if(window.roomData.status === 'playing') {
-                        document.getElementById('lobbyScreen').style.display = 'none'; 
+                        document.getElementById('lobbyScreen').style.display = 'none';
                         document.getElementById('headerActions').style.display = 'none';
-                        document.getElementById('gameScreen').style.display = 'flex'; 
+                        document.getElementById('gameScreen').style.display = 'flex';
                         document.getElementById('roomStatusText').innerText = "Spelet är igång!";
-                        
+
                         renderLeaderboard();
-                        
+
                         if(!window.gameTimerInterval && window.roomData.timerEndsAt) {
                             startLocalTimer();
                         }
                     } else if (window.roomData.status === 'finished') {
-                        document.getElementById('lobbyScreen').style.display = 'none'; 
+                        document.getElementById('lobbyScreen').style.display = 'none';
                         document.getElementById('gameScreen').style.display = 'none';
-                        document.getElementById('headerActions').style.display = 'none'; 
+                        document.getElementById('headerActions').style.display = 'none';
                         document.getElementById('podiumScreen').style.display = 'flex';
-                        document.getElementById('roomStatusText').innerText = "Spelet är avslutat!"; 
-                        
-                        clearInterval(window.gameTimerInterval); 
-                        
+                        document.getElementById('roomStatusText').innerText = "Spelet är avslutat!";
+
+                        clearInterval(window.gameTimerInterval);
+
                         renderPodium();
                         autoCleanupRoom();
                     }
@@ -256,6 +293,7 @@
                 }
             });
 
+            // --- Listen to submissions (authoritative answer checking) ---
             onSnapshot(collection(window.db, "rooms", window.roomId, "submissions"), (snap) => {
                 snap.docChanges().forEach(async (change) => {
                     if (change.type === "added" || change.type === "modified") {
@@ -266,15 +304,15 @@
                         if (!window.roomData || !window.roomData.teamData || !window.roomData.teamData[teamId]) return;
 
                         const tData = window.roomData.teamData[teamId];
-                        const pkg = window.roomData.package;
+                        const pkg = window.hostPackage;
                         const currentQ = pkg.questions[tData.currentQuestionIndex];
-                        
-                        if(!currentQ) return; 
+
+                        if(!currentQ) return;
 
                         const totalBonus = (currentQ.bonusClues) ? currentQ.bonusClues.length : 0;
 
-                        if (guess === "__SKIP__") {
-                            let nextIndex = tData.currentQuestionIndex + 1;
+                        // Helper: generate next question for advanced mode
+                        async function maybeGenerateNext(nextIndex) {
                             if (nextIndex >= pkg.questions.length && pkg.isAdvanced) {
                                 try {
                                     const generator = new Function(pkg.generatorCode);
@@ -286,24 +324,43 @@
                                     }
                                     if (!newQ) newQ = generator();
                                     if (newQ && newQ.question && newQ.answer && newQ.clues) {
-                                        newQ.answer = hashAnswer(newQ.answer);
+                                        newQ.answer = await hashAnswerSecure(newQ.answer, pkg.salt);
                                         newQ._uid = Date.now().toString() + Math.random().toString(36);
-                                        await updateDoc(doc(window.db, "rooms", window.roomId), { "package.questions": arrayUnion(newQ) });
+                                        pkg.questions.push(newQ); // update in-memory
+                                        await updateDoc(doc(window.db, "rooms", window.roomId, "host_data", "package"), {
+                                            questions: arrayUnion(newQ)
+                                        });
                                     }
                                 } catch (e) { console.error("Gen fel", e); }
                             }
-                            await updateDoc(doc(window.db, "rooms", window.roomId), {
+                        }
+
+                        // Helper: build currentQuestion for student view (NO answer hash)
+                        function buildStudentQuestion(q) {
+                            if (!q) return null;
+                            return { question: q.question, clues: q.clues, bonusClues: q.bonusClues || [] };
+                        }
+
+                        if (guess === "__SKIP__") {
+                            let nextIndex = tData.currentQuestionIndex + 1;
+                            await maybeGenerateNext(nextIndex);
+
+                            const nextQ = pkg.questions[nextIndex] || null;
+                            const updates = {
                                 [`teamData.${teamId}.currentQuestionIndex`]: nextIndex,
-                                [`teamData.${teamId}.wrongGuesses`]: 0
-                            });
+                                [`teamData.${teamId}.wrongGuesses`]: 0,
+                                [`teamData.${teamId}.currentQuestion`]: buildStudentQuestion(nextQ)
+                            };
+                            await updateDoc(doc(window.db, "rooms", window.roomId), updates);
                         } else {
-                            const hashedGuess = hashAnswer(guess);
+                            const hashedGuess = await hashAnswerSecure(guess, pkg.salt);
                             let isCorrect = (hashedGuess === currentQ.answer);
 
                             if (!isCorrect) {
                                 const numberMatch = guess.match(/^(\-?\d+(?:[.,]\d+)?)/);
-                                if (numberMatch && hashAnswer(numberMatch[1]) === currentQ.answer) {
-                                    isCorrect = true; 
+                                if (numberMatch) {
+                                    const numHash = await hashAnswerSecure(numberMatch[1], pkg.salt);
+                                    if (numHash === currentQ.answer) isCorrect = true;
                                 }
                             }
 
@@ -311,36 +368,23 @@
 
                             if (isCorrect) {
                                 let nextIndex = tData.currentQuestionIndex + 1;
-                                if (nextIndex >= pkg.questions.length && pkg.isAdvanced) {
-                                    try {
-                                        const generator = new Function(pkg.generatorCode);
-                                        let newQ = null;
-                                        for (let i = 0; i < 50; i++) {
-                                            const tempQ = generator();
-                                            const exists = pkg.questions.some(q => q.question === tempQ.question);
-                                            if (!exists) { newQ = tempQ; break; }
-                                        }
-                                        if (!newQ) newQ = generator();
-                                        if (newQ && newQ.question && newQ.answer && newQ.clues) {
-                                            newQ.answer = hashAnswer(newQ.answer);
-                                            newQ._uid = Date.now().toString() + Math.random().toString(36);
-                                            await updateDoc(doc(window.db, "rooms", window.roomId), { "package.questions": arrayUnion(newQ) });
-                                        }
-                                    } catch (e) { console.error("Gen fel", e); }
-                                }
-                                await updateDoc(doc(window.db, "rooms", window.roomId), {
+                                await maybeGenerateNext(nextIndex);
+
+                                const nextQ = pkg.questions[nextIndex] || null;
+                                const updates = {
                                     [`teamData.${teamId}.score`]: tData.score + potentialPoints,
                                     [`teamData.${teamId}.currentQuestionIndex`]: nextIndex,
-                                    [`teamData.${teamId}.wrongGuesses`]: 0
-                                });
+                                    [`teamData.${teamId}.wrongGuesses`]: 0,
+                                    [`teamData.${teamId}.currentQuestion`]: buildStudentQuestion(nextQ)
+                                };
+                                await updateDoc(doc(window.db, "rooms", window.roomId), updates);
                             } else {
-                                await updateDoc(doc(window.db, "rooms", window.roomId), { 
-                                    [`teamData.${teamId}.wrongGuesses`]: tData.wrongGuesses + 1 
+                                await updateDoc(doc(window.db, "rooms", window.roomId), {
+                                    [`teamData.${teamId}.wrongGuesses`]: tData.wrongGuesses + 1
                                 });
                             }
                         }
-                        
-                        // Delete the processed submission
+
                         await deleteDoc(change.doc.ref);
                     }
                 });
@@ -350,18 +394,22 @@
         window.autoCleanupRoom = async function() {
             try {
                 setTimeout(async () => {
+                    // Delete host_data subcollection
+                    try {
+                        await deleteDoc(doc(window.db, "rooms", window.roomId, "host_data", "package"));
+                    } catch(e) { /* ignore */ }
+
                     const playersRef = collection(window.db, "rooms", window.roomId, "players");
                     const playersSnap = await getDocs(playersRef);
                     const batch = writeBatch(window.db);
-                    
+
                     playersSnap.forEach(playerDoc => {
                         batch.delete(playerDoc.ref);
                     });
                     await batch.commit();
 
                     await deleteDoc(doc(window.db, "rooms", window.roomId));
-                    localStorage.removeItem('lockAndKey_hostToken_' + window.roomId);
-                    
+
                     console.log("Databasen är rensad på personuppgifter och stängd.");
                 }, 3000);
             } catch (error) {
@@ -370,18 +418,28 @@
         }
 
         window.executeStartGame = async function() {
-            const activeTeams = new Set(); 
+            const activeTeams = new Set();
             window.players.forEach(p => { if(p.team) activeTeams.add(p.team); });
-            
-            const initialTeamData = {}; 
-            activeTeams.forEach(teamId => { 
-                initialTeamData[teamId] = { score: 0, currentQuestionIndex: 0, wrongGuesses: 0, lastPenalty: 0 }; 
+
+            const pkg = window.hostPackage;
+            const firstQ = pkg.questions[0];
+            const studentFirstQ = firstQ ? { question: firstQ.question, clues: firstQ.clues, bonusClues: firstQ.bonusClues || [] } : null;
+
+            const initialTeamData = {};
+            activeTeams.forEach(teamId => {
+                initialTeamData[teamId] = {
+                    score: 0,
+                    currentQuestionIndex: 0,
+                    wrongGuesses: 0,
+                    lastPenalty: 0,
+                    currentQuestion: studentFirstQ
+                };
             });
-            
-            await updateDoc(doc(window.db, "rooms", window.roomId), { 
-                status: "playing", 
-                teamData: initialTeamData, 
-                timerEndsAt: Date.now() + 10 * 60 * 1000 
+
+            await updateDoc(doc(window.db, "rooms", window.roomId), {
+                status: "playing",
+                teamData: initialTeamData,
+                timerEndsAt: Date.now() + 10 * 60 * 1000
             });
         }
 
@@ -442,7 +500,7 @@
                 card.innerHTML = `
                     <div class="lb-info">
                         <h2><span style="display:inline-block; min-width:25px; height:25px; border-radius:50%; background:${t.color}; border:1px solid rgba(0,0,0,0.1);"></span> ${index + 1}. ${t.name}</h2>
-                        <p>Fråga ${t.currentQuestionIndex + 1} av ${window.roomData.package.questions.length}</p>
+                        <p>Fråga ${t.currentQuestionIndex + 1} av ${window.hostPackage.questions.length}</p>
                         ${membersHtml}
                         <div style="margin-top: 6px;">
                             <button class="btn-danger" style="padding: 4px 8px; font-size: 0.75rem;" onclick="givePenalty('${t.id}')">-50p (Fusk)</button>

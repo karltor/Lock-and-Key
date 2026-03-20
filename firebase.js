@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
 const app = initializeApp({
     apiKey: "AIzaSyDdGSoiqa1_xf9RK-LeWe3ttepzpt-ocLs",
@@ -11,3 +12,11 @@ const app = initializeApp({
 });
 
 export const db = getFirestore(app);
+export const auth = getAuth(app);
+
+// Signs in anonymously (reuses existing session if present).
+// Returns a promise that resolves with the user's UID.
+export function ensureAuth() {
+    if (auth.currentUser) return Promise.resolve(auth.currentUser.uid);
+    return signInAnonymously(auth).then(cred => cred.user.uid);
+}

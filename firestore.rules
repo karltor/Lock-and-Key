@@ -1,0 +1,124 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ========================================
+    // 1. LÅS ALLT SOM STANDARD
+    // ========================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ========================================
+    // 2. BOARDS (delade frågepaket)
+    //    - Ersätter gamla shared_packages
+    //    - Alla inloggade kan läsa
+    //    - Bara skapa (create), aldrig uppdatera/radera = IMMUTABLA
+    //    - Kräver autentisering
+    // ========================================
+    match /boards/{boardId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() < 200
+        && request.resource.data.questions is list
+        && request.resource.data.questions.size() > 0
+        && request.resource.data.questions.size() <= 500
+        && request.resource.data.creatorUid == request.auth.uid;
+
+      // Ingen update eller delete – bräden är permanenta och oföränderliga
+    }
+
+    // ========================================
+    // 3. ROOMS (spelrum)
+    // ========================================
+    match /rooms/{roomId} {
+      // Alla inloggade kan läsa (elever behöver se teamData)
+      allow read: if request.auth != null;
+
+      // Bara skaparen (host) kan skapa ett rum
+      allow create: if request.auth != null
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.status == "lobby";
+
+      // Bara host kan uppdatera (status, teamData, timer)
+      allow update: if request.auth != null
+        && resource.data.hostUid == request.auth.uid;
+
+      // Bara host kan radera (cleanup)
+      allow delete: if request.auth != null
+        && resource.data.hostUid == request.auth.uid;
+
+      // ------------------------------------------
+      // 3a. HOST_DATA (privat paketdata – bara host)
+      //     Innehåller frågor med hashade svar.
+      //     Elever kan INTE läsa detta.
+      // ------------------------------------------
+      match /host_data/{docId} {
+        allow read: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid;
+
+        allow create: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid;
+
+        allow update: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid;
+
+        allow delete: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid;
+      }
+
+      // ------------------------------------------
+      // 3b. PLAYERS (spelare i rummet)
+      // ------------------------------------------
+      match /players/{playerId} {
+        // Alla inloggade i rummet kan se spelarlistan
+        allow read: if request.auth != null;
+
+        // En spelare kan bara skapa sin EGEN doc (playerId = deras UID)
+        allow create: if request.auth != null
+          && playerId == request.auth.uid
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 50;
+
+        // Spelaren kan uppdatera sin egen, host kan uppdatera alla (lagindelning, namnbyte)
+        allow update: if request.auth != null
+          && (playerId == request.auth.uid
+              || request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid);
+
+        // Spelaren kan lämna (radera sin egen), host kan kicka (radera alla)
+        allow delete: if request.auth != null
+          && (playerId == request.auth.uid
+              || request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid);
+      }
+
+      // ------------------------------------------
+      // 3c. SUBMISSIONS (gissningar från elever)
+      //     - Elever skapar/uppdaterar sin gissning
+      //     - Bara host kan läsa och radera (efter kontroll)
+      //     - Elever kan INTE läsa andras gissningar
+      //     - Kräver att spelaren finns i rummet
+      // ------------------------------------------
+      match /submissions/{teamId} {
+        // Bara host kan läsa gissningar
+        allow read: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid;
+
+        // Elever kan skicka in gissningar (kräver att de är registrerade i rummet)
+        allow create, update: if request.auth != null
+          && request.auth.uid != get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid
+          && exists(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid))
+          && request.resource.data.guess is string
+          && request.resource.data.guess.size() > 0
+          && request.resource.data.guess.size() <= 500;
+
+        // Bara host kan radera (efter svar har kontrollerats)
+        allow delete: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid;
+      }
+    }
+  }
+}
