@@ -84,10 +84,18 @@ service cloud.firestore {
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 50;
 
-        // Spelaren kan uppdatera sin egen, host kan uppdatera alla (lagindelning, namnbyte)
+        // Spelaren kan uppdatera sin egen (bara namn), host kan uppdatera alla (lagindelning, namnbyte)
         allow update: if request.auth != null
-          && (playerId == request.auth.uid
-              || request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid);
+          && (
+              // Host kan ändra vad som helst (lagindelning, namnbyte etc.)
+              request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid
+              // Spelaren kan bara ändra sitt eget namn – INTE team eller andra fält
+              || (playerId == request.auth.uid
+                  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+                  && request.resource.data.name is string
+                  && request.resource.data.name.size() > 0
+                  && request.resource.data.name.size() <= 50)
+          );
 
         // Spelaren kan lämna (radera sin egen), host kan kicka (radera alla)
         allow delete: if request.auth != null
@@ -107,10 +115,12 @@ service cloud.firestore {
         allow read: if request.auth != null
           && request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid;
 
-        // Elever kan skicka in gissningar (kräver att de är registrerade i rummet)
+        // Elever kan skicka in gissningar (kräver att de tillhör rätt lag)
         allow create, update: if request.auth != null
           && request.auth.uid != get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid
           && exists(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid))
+          // Kontrollera att eleven tillhör det lag de skickar in svar för
+          && string(get(/databases/$(database)/documents/rooms/$(roomId)/players/$(request.auth.uid)).data.team) == teamId
           && request.resource.data.guess is string
           && request.resource.data.guess.size() > 0
           && request.resource.data.guess.size() <= 500;
