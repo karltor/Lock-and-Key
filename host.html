@@ -4,19 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lock and Key - Lärarlobby</title>
+    <link rel="stylesheet" href="styles.css">
     <style>
-        :root {
-            --bg-color: #f0f4f8; --panel-bg: #ffffff;
-            --primary: #2563eb; --primary-hover: #1d4ed8;
-            --success: #16a34a; --success-hover: #15803d;
-            --danger: #ef4444; --danger-hover: #dc2626;
-            --warning: #f59e0b; --text-main: #1e293b;
-            --text-muted: #64748b; --border: #cbd5e1;
-            --border-radius: 6px;
-        }
+        :root { --border-radius: 6px; }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: var(--bg-color); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        body { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         
         header { background-color: var(--primary); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10; }
         .room-info h1 { font-size: 1.8rem; margin-bottom: 5px; }
@@ -49,10 +41,6 @@
         .btn-warning { background-color: var(--warning); color: white; }
         .btn-outline { background-color: transparent; border: 1px solid var(--border); color: var(--text-main); }
         .btn-outline:hover { background-color: #f1f5f9; }
-        
-        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--text-main); color: white; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 1000; font-weight: bold; display: none; }
-        .toast.error { background: var(--danger); }
-        .toast.success { background: var(--success); }
 
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
         .modal-box { background: white; padding: 25px; border-radius: var(--border-radius); width: 400px; max-width: 90%; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
@@ -158,20 +146,13 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, collection, onSnapshot, updateDoc, deleteDoc, writeBatch, getDocs, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { doc, setDoc, collection, onSnapshot, updateDoc, deleteDoc, writeBatch, getDocs, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { db } from './firebase.js';
+        import { getTeamName, getTeamColor, calculatePoints, hashAnswer } from './shared.js';
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyDdGSoiqa1_xf9RK-LeWe3ttepzpt-ocLs",
-            authDomain: "lock-and-key-e96a1.firebaseapp.com",
-            projectId: "lock-and-key-e96a1",
-            storageBucket: "lock-and-key-e96a1.firebasestorage.app",
-            messagingSenderId: "632843065326",
-            appId: "1:632843065326:web:6dbe765294c3aefe7460ff"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        window.db = getFirestore(app);
+        window.db = db;
+        window.getTeamName = getTeamName;
+        window.getTeamColor = getTeamColor;
 
         window.roomId = new URLSearchParams(window.location.search).get('room');
         window.localToken = localStorage.getItem('lockAndKey_hostToken_' + window.roomId);
@@ -179,37 +160,6 @@
         window.numberOfTeams = 4;
         window.gameTimerInterval = null;
         window.roomData = null;
-
-        const ADJECTIVES = ["De Snabba", "De Starka", "De Listiga", "De Modiga", "De Galna", "De Smarta", "De Vilda", "De Mystiska", "De Tysta", "De Lysande"];
-        const NOUNS = ["Stormarna", "Örnarna", "Tornen", "Vargarna", "Björnarna", "Hajarna", "Lejonen", "Tigrarna", "Falkarna", "Kobrorna"];
-        const TEAM_COLORS = ["#ffb3ba", "#ffdfba", "#ffffba", "#baffc9", "#bae1ff", "#e8cbff", "#ffcbf2", "#e2f0cb", "#ffdac1", "#c5a3ff"];
-
-        window.getTeamName = function(index) {
-            const adjIndex = Math.floor((index - 1) / NOUNS.length) % ADJECTIVES.length;
-            const nounIndex = (index - 1) % NOUNS.length;
-            return index <= NOUNS.length ? NOUNS[nounIndex] : `${ADJECTIVES[adjIndex]} ${NOUNS[nounIndex]}`;
-        }
-        window.getTeamColor = function(index) { 
-            return TEAM_COLORS[(index - 1) % TEAM_COLORS.length]; 
-        }
-
-        window.hashAnswer = function(str) {
-            let hash = 0; 
-            let s = str.toString().trim().toLowerCase();
-            for (let i = 0; i < s.length; i++) {
-                let char = s.charCodeAt(i);
-                hash = ((hash << 5) - hash) + char;
-                hash = hash & hash; 
-            }
-            return hash.toString();
-        }
-
-        window.calculatePoints = function(w, t) {
-            let p20 = Math.min(w, t);
-            let p10 = Math.max(0, w - t);
-            let p = 100 * Math.pow(0.8, p20) * Math.pow(0.9, p10);
-            return Math.max(10, Math.floor(p)); 
-        }
 
         async function initHost() {
             if (!window.roomId || !window.localToken) {
@@ -246,7 +196,7 @@
                     }
 
                     safePackage.questions.forEach(q => {
-                        q.answer = window.hashAnswer(q.answer);
+                        q.answer = hashAnswer(q.answer);
                     });
 
                     await setDoc(doc(window.db, "rooms", window.roomId), { 
@@ -336,7 +286,7 @@
                                     }
                                     if (!newQ) newQ = generator();
                                     if (newQ && newQ.question && newQ.answer && newQ.clues) {
-                                        newQ.answer = window.hashAnswer(newQ.answer);
+                                        newQ.answer = hashAnswer(newQ.answer);
                                         newQ._uid = Date.now().toString() + Math.random().toString(36);
                                         await updateDoc(doc(window.db, "rooms", window.roomId), { "package.questions": arrayUnion(newQ) });
                                     }
@@ -347,17 +297,17 @@
                                 [`teamData.${teamId}.wrongGuesses`]: 0
                             });
                         } else {
-                            const hashedGuess = window.hashAnswer(guess);
+                            const hashedGuess = hashAnswer(guess);
                             let isCorrect = (hashedGuess === currentQ.answer);
 
                             if (!isCorrect) {
                                 const numberMatch = guess.match(/^(\-?\d+(?:[.,]\d+)?)/);
-                                if (numberMatch && window.hashAnswer(numberMatch[1]) === currentQ.answer) {
+                                if (numberMatch && hashAnswer(numberMatch[1]) === currentQ.answer) {
                                     isCorrect = true; 
                                 }
                             }
 
-                            const potentialPoints = window.calculatePoints(tData.wrongGuesses, totalBonus);
+                            const potentialPoints = calculatePoints(tData.wrongGuesses, totalBonus);
 
                             if (isCorrect) {
                                 let nextIndex = tData.currentQuestionIndex + 1;
@@ -372,7 +322,7 @@
                                         }
                                         if (!newQ) newQ = generator();
                                         if (newQ && newQ.question && newQ.answer && newQ.clues) {
-                                            newQ.answer = window.hashAnswer(newQ.answer);
+                                            newQ.answer = hashAnswer(newQ.answer);
                                             newQ._uid = Date.now().toString() + Math.random().toString(36);
                                             await updateDoc(doc(window.db, "rooms", window.roomId), { "package.questions": arrayUnion(newQ) });
                                         }
@@ -464,8 +414,8 @@
 
             const teamsArray = Object.keys(window.roomData.teamData).map(tId => ({
                 id: parseInt(tId), 
-                name: window.getTeamName(parseInt(tId)), 
-                color: window.getTeamColor(parseInt(tId)), 
+                name: getTeamName(parseInt(tId)), 
+                color: getTeamColor(parseInt(tId)), 
                 ...window.roomData.teamData[tId]
             })).sort((a, b) => b.score - a.score);
 
@@ -535,8 +485,8 @@
             if(!window.roomData || !window.roomData.teamData) return;
             
             const teams = Object.keys(window.roomData.teamData).map(tId => ({ 
-                name: window.getTeamName(parseInt(tId)), 
-                color: window.getTeamColor(parseInt(tId)), 
+                name: getTeamName(parseInt(tId)), 
+                color: getTeamColor(parseInt(tId)), 
                 score: window.roomData.teamData[tId].score 
             })).sort((a, b) => b.score - a.score);
             
@@ -595,7 +545,7 @@
             for (let i = 1; i <= window.numberOfTeams; i++) { 
                 grid.innerHTML += `
                     <div class="team-box" ondragover="allowDrop(event)" ondrop="drop(event, ${i})" ondragenter="this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')">
-                        <div class="team-header" style="background-color: ${window.getTeamColor(i)}">${window.getTeamName(i)}</div>
+                        <div class="team-header" style="background-color: ${getTeamColor(i)}">${getTeamName(i)}</div>
                         <div class="team-players" id="team-${i}"></div>
                     </div>`; 
             }

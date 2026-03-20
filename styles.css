@@ -1,0 +1,26 @@
+/* Gemensamma CSS-variabler för host.html och play.html (blått tema) */
+:root {
+    --bg-color: #f0f4f8;
+    --panel-bg: #ffffff;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --success: #16a34a;
+    --success-hover: #15803d;
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+    --warning: #f59e0b;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --border: #cbd5e1;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+body { background-color: var(--bg-color); color: var(--text-main); }
+
+/* Toast (top-center, används av host och play) */
+.toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--text-main); color: white; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 1000; font-weight: bold; display: none; }
+.toast.error  { background: var(--danger); }
+.toast.success { background: var(--success); }
+.toast.warning { background: var(--warning); }
+.toast.info   { background: var(--success); }
