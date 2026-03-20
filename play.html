@@ -5,18 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://firebase.googleapis.com;">
     <title>Lock and Key - Elev</title>
+    <link rel="stylesheet" href="styles.css">
     <style>
-        :root {
-            --bg-color: #f0f4f8; --panel-bg: #ffffff;
-            --primary: #2563eb; --primary-hover: #1d4ed8;
-            --success: #16a34a; --danger: #ef4444;
-            --warning: #f59e0b; --text-main: #1e293b;
-            --text-muted: #64748b; --border: #cbd5e1;
-            --border-radius: 8px;
-        }
+        :root { --border-radius: 8px; }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: var(--bg-color); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; touch-action: manipulation; transition: background-color 0.3s; }
+        body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; touch-action: manipulation; transition: background-color 0.3s; }
         
         .flash-penalty { background-color: #7f1d1d !important; }
 
@@ -35,9 +28,7 @@
         .btn-warning { background-color: var(--warning); } .btn-warning:hover:not(:disabled) { background-color: #d97706; }
 
         .error-msg { color: var(--danger); font-size: 0.9rem; margin-top: 10px; font-weight: 600; min-height: 20px; }
-        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--danger); color: white; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 1000; font-weight: bold; display: none; }
-        .toast.warning { background: var(--warning); }
-        .toast.info { background: var(--success); }
+        .toast { background: var(--danger); }
 
         .bonus-popup {
             position: fixed; bottom: 40px; left: 50%; transform: translate(-50%, 20px);
@@ -140,38 +131,9 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, onSnapshot, getDoc, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-
-        const fC = {
-            apiKey: "AIzaSyDdGSoiqa1_xf9RK-LeWe3ttepzpt-ocLs",
-            authDomain: "lock-and-key-e96a1.firebaseapp.com",
-            projectId: "lock-and-key-e96a1",
-            storageBucket: "lock-and-key-e96a1.firebasestorage.app",
-            messagingSenderId: "632843065326",
-            appId: "1:632843065326:web:6dbe765294c3aefe7460ff"
-        };
-
-        const app = initializeApp(fC);
-        const db = getFirestore(app);
-
-        const A = ["De Snabba", "De Starka", "De Listiga", "De Modiga", "De Galna", "De Smarta", "De Vilda", "De Mystiska", "De Tysta", "De Lysande"];
-        const N = ["Stormarna", "Örnarna", "Tornen", "Vargarna", "Björnarna", "Hajarna", "Lejonen", "Tigrarna", "Falkarna", "Kobrorna"];
-        const C = ["#ffb3ba", "#ffdfba", "#ffffba", "#baffc9", "#bae1ff", "#e8cbff", "#ffcbf2", "#e2f0cb", "#ffdac1", "#c5a3ff"];
-
-        function gTN(i) {
-            const aI = Math.floor((i - 1) / N.length) % A.length;
-            const nI = (i - 1) % N.length;
-            return i <= N.length ? N[nI] : `${A[aI]} ${N[nI]}`;
-        }
-        function gTC(i) { return C[(i - 1) % C.length]; }
-        
-        function calcP(w, t) {
-            let p20 = Math.min(w, t);
-            let p10 = Math.max(0, w - t);
-            let p = 100 * Math.pow(0.8, p20) * Math.pow(0.9, p10);
-            return Math.max(10, Math.floor(p)); 
-        }
+        import { doc, setDoc, onSnapshot, getDoc, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { db } from './firebase.js';
+        import { getTeamName as gTN, getTeamColor as gTC, calculatePoints as calcP } from './shared.js';
 
         window.pI = localStorage.getItem('lk_p') || 's_' + Date.now() + Math.random().toString(36).substr(2, 5);
         window.cR = null;
