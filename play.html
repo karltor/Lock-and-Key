@@ -191,17 +191,35 @@
             document.getElementById('greetingName').innerText = `Välkommen, ${n}!`;
             window.history.replaceState({}, '', `?room=${r}`);
 
+            // Persist session for page refresh
+            sessionStorage.setItem('lk_room', r);
+            sessionStorage.setItem('lk_name', n);
+
             sMg();
             lTG(r);
         };
 
         window.addEventListener('beforeunload', () => {
-            if (window.cR && window.pI) deleteDoc(doc(db, "rooms", window.cR, "players", window.pI));
+            // Only delete player if not refreshing (no saved session)
+            if (window.cR && window.pI && !sessionStorage.getItem('lk_room')) {
+                deleteDoc(doc(db, "rooms", window.cR, "players", window.pI));
+            }
         });
 
         window.addEventListener('DOMContentLoaded', () => {
             const u = new URLSearchParams(window.location.search);
             const r = u.get('room');
+
+            // Auto-rejoin if session data exists (page was refreshed)
+            const savedRoom = sessionStorage.getItem('lk_room');
+            const savedName = sessionStorage.getItem('lk_name');
+            if (savedRoom && savedName && (!r || r.toUpperCase() === savedRoom)) {
+                document.getElementById('roomInput').value = savedRoom;
+                document.getElementById('nameInput').value = savedName;
+                window.jR();
+                return;
+            }
+
             if (r) {
                 document.getElementById('roomInput').value = r.toUpperCase();
                 document.getElementById('roomInput').disabled = true;
@@ -374,18 +392,34 @@
         window.sA = async function() {
             if(!mT || !rD || window.iC) return;
             const iE = document.getElementById('answerInput');
-            const v = iE.value; 
+            const v = iE.value;
             if(!v.trim()) return;
 
             iE.disabled = true;
             document.getElementById('submitBtn').disabled = true;
 
-            await setDoc(doc(db, "rooms", window.cR, "submissions", mT.toString()), {
-                guess: v.trim(),
-                timestamp: Date.now()
-            });
+            // Safety timeout: re-enable input if no response within 10s
+            const safetyTimer = setTimeout(() => {
+                if (iE.disabled && !window.iC) {
+                    iE.disabled = false;
+                    document.getElementById('submitBtn').disabled = false;
+                    iE.focus();
+                }
+            }, 10000);
 
-            iE.value = ''; 
+            try {
+                await setDoc(doc(db, "rooms", window.cR, "submissions", mT.toString()), {
+                    guess: v.trim(),
+                    timestamp: Date.now()
+                });
+                iE.value = '';
+            } catch (e) {
+                clearTimeout(safetyTimer);
+                iE.disabled = false;
+                document.getElementById('submitBtn').disabled = false;
+                iE.focus();
+                sT("Kunde inte skicka svar. Försök igen!", "error");
+            }
         }
 
         window.sQ = async function() {
