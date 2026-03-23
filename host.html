@@ -154,6 +154,15 @@
         window.getTeamName = getTeamName;
         window.getTeamColor = getTeamColor;
 
+        function esc(s) {
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         window.roomId = new URLSearchParams(window.location.search).get('room');
         window.hostUid = null;
         window.hostPackage = null; // Loaded from host_data (only host can read)
@@ -427,12 +436,17 @@
 
             const initialTeamData = {};
             activeTeams.forEach(teamId => {
+                const teamPlayerIds = window.players
+                    .filter(p => p.team === teamId)
+                    .map(p => p.id)
+                    .sort((a, b) => a.localeCompare(b));
                 initialTeamData[teamId] = {
                     score: 0,
                     currentQuestionIndex: 0,
                     wrongGuesses: 0,
                     lastPenalty: 0,
-                    currentQuestion: studentFirstQ
+                    currentQuestion: studentFirstQ,
+                    playerIds: teamPlayerIds
                 };
             });
 
@@ -491,11 +505,11 @@
                 
                 const isTop3 = index < 3;
                 const teamPlayersArr = window.players.filter(p => p.team === t.id).map(p => p.name);
-                const teamPlayersText = teamPlayersArr.join(', ');
-                
+                const teamPlayersTextEsc = esc(teamPlayersArr.join(', '));
+
                 const cardHeight = isTop3 ? 125 : 105;
-                
-                const membersHtml = isTop3 ? `<p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${teamPlayersText}">👥 ${teamPlayersText || 'Inga spelare anslutna'}</p>` : '';
+
+                const membersHtml = isTop3 ? `<p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${teamPlayersTextEsc}">👥 ${teamPlayersTextEsc || 'Inga spelare anslutna'}</p>` : '';
 
                 card.innerHTML = `
                     <div class="lb-info">
@@ -635,11 +649,13 @@
                 chip.id = `player-${p.id}`; 
                 chip.ondragstart = (e) => e.dataTransfer.setData("playerId", p.id);
                 chip.innerHTML = `
-                    <span>${p.name}</span>
+                    <span>${esc(p.name)}</span>
                     <div class="player-actions">
-                        <button class="action-btn" onclick="renamePlayer('${p.id}', '${p.name}')">✏️</button>
-                        <button class="action-btn" onclick="kickPlayer('${p.id}')">❌</button>
+                        <button class="action-btn" data-action="rename">✏️</button>
+                        <button class="action-btn" data-action="kick">❌</button>
                     </div>`;
+                chip.querySelector('[data-action="rename"]').addEventListener('click', () => renamePlayer(p.id, p.name));
+                chip.querySelector('[data-action="kick"]').addEventListener('click', () => kickPlayer(p.id));
                     
                 if (p.team == null) {
                     document.getElementById('unassignedList').appendChild(chip); 

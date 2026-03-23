@@ -86,7 +86,7 @@
     <div class="card" id="joinScreen">
         <h1>Lock and Key 🗝️</h1>
         <div class="form-group"><label>Rumskod</label><input type="text" id="roomInput" placeholder="T.ex. A1B2" autocomplete="off" style="text-transform: uppercase;" onkeypress="if(event.key === 'Enter') window.jR()"></div>
-        <div class="form-group"><label>Ditt namn</label><input type="text" id="nameInput" placeholder="Skriv in ditt namn" autocomplete="off" onkeypress="if(event.key === 'Enter') window.jR()"></div>
+        <div class="form-group"><label>Ditt namn</label><input type="text" id="nameInput" placeholder="Skriv in ditt namn" autocomplete="off" maxlength="50" onkeypress="if(event.key === 'Enter') window.jR()"></div>
         <button onclick="window.jR()">Gå med</button>
         <div class="error-msg" id="loginError"></div>
     </div>
@@ -133,15 +133,23 @@
     </div>
 
     <script type="module">
-        import { doc, setDoc, onSnapshot, getDoc, collection, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { doc, setDoc, onSnapshot, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
         import { db, ensureAuth } from './firebase.js';
         import { getTeamName as gTN, getTeamColor as gTC, calculatePoints as calcP } from './shared.js';
 
         window.pI = null; // Set to auth UID after sign-in
         window.cR = null;
-        
+
+        function esc(s) {
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         let mT = null;
-        let aP = [];
         let rD = null;
         let lP = 0;
         let iM = false;
@@ -171,6 +179,7 @@
             const r = document.getElementById('roomInput').value.trim().toUpperCase();
             const n = document.getElementById('nameInput').value.trim();
             if (!r || !n) { document.getElementById('loginError').innerText = "Fyll i båda fälten!"; return; }
+            if (n.length > 50) { document.getElementById('loginError').innerText = "Namnet får max vara 50 tecken."; return; }
 
             try {
                 const uid = await ensureAuth();
@@ -230,30 +239,24 @@
         });
 
         function lTG(r) {
-            onSnapshot(collection(db, "rooms", r, "players"), (s) => {
-                aP = [];
-                s.forEach(d => aP.push({ id: d.id, ...d.data() }));
-
-                const m = aP.find(p => p.id === window.pI);
-                if (!m) { 
-                    sT("Utslängd.", "error"); 
-                    setTimeout(() => window.location.reload(), 2000); 
-                    return; 
+            // Lyssnar bara på eget player-dokument (GDPR: andra elevers namn är inte tillgängliga)
+            onSnapshot(doc(db, "rooms", r, "players", window.pI), (d) => {
+                if (!d.exists()) {
+                    sT("Utslängd.", "error");
+                    setTimeout(() => window.location.reload(), 2000);
+                    return;
                 }
 
-                mT = m.team;
-                
+                mT = d.data().team;
+
                 const sE = document.getElementById('playerStatus');
                 const tB = document.getElementById('teammatesBox');
-                const tL = document.getElementById('teammatesList');
 
                 if (mT) {
                     sE.innerHTML = `✅ Lag: <strong>${gTN(mT)}</strong>`;
                     sE.style.backgroundColor = gTC(mT);
                     sE.style.boxShadow = `0 4px 10px ${gTC(mT)}88`;
-                    const mTmA = aP.filter(p => p.team === mT);
-                    tB.style.display = 'block';
-                    tL.innerHTML = mTmA.map(p => `<div class="teammate-badge">${p.name}${p.id === window.pI ? ' (Du)' : ''}</div>`).join('');
+                    tB.style.display = 'none';
                 } else {
                     sE.innerHTML = `Väntar på lagindelning... 👀`;
                     sE.style.backgroundColor = '#e2e8f0';
@@ -361,16 +364,17 @@
                 iE.placeholder = "Skriv ert gemensamma svar här...";
             }
 
-            const mTmA = aP.filter(p => p.team === mT).sort((a,b) => a.id.localeCompare(b.id));
-            const mI = mTmA.findIndex(p => p.id === window.pI);
+            // playerIds lagras av hosten vid spelstart, sorterade – används för ledtrådsdistribution
+            const playerIds = tD.playerIds && tD.playerIds.length > 0 ? tD.playerIds : [window.pI];
+            const mI = playerIds.indexOf(window.pI);
 
             let mAC = [];
             let mAB = [];
-            let pT = tD.currentQuestionIndex % mTmA.length;
+            let pT = tD.currentQuestionIndex % playerIds.length;
 
             cQ.clues.forEach((c) => {
                 if (pT === mI) mAC.push(c);
-                pT = (pT + 1) % mTmA.length;
+                pT = (pT + 1) % playerIds.length;
             });
 
             const aBC = cQ.bonusClues || [];
@@ -378,7 +382,7 @@
 
             uBC.forEach((bc) => {
                 if (pT === mI) mAB.push(bc);
-                pT = (pT + 1) % mTmA.length;
+                pT = (pT + 1) % playerIds.length;
             });
 
             let cH = mAC.map(c => `<div class="clue-item">💡 ${c}</div>`).join('');
