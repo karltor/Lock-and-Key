@@ -193,7 +193,17 @@
             if (!s.exists()) { document.getElementById('loginError').innerText = "Rummet finns inte!"; return; }
 
             window.cR = r;
-            await setDoc(doc(db, "rooms", r, "players", window.pI), { name: n, team: null, joinedAt: Date.now() });
+
+            // Check if player doc already exists (reconnecting after refresh)
+            const existingPlayer = await getDoc(doc(db, "rooms", r, "players", window.pI));
+            if (existingPlayer.exists()) {
+                // Preserve existing team assignment — just update name in case it changed
+                const existingData = existingPlayer.data();
+                mT = existingData.team;
+            } else {
+                // First time joining — create new player doc
+                await setDoc(doc(db, "rooms", r, "players", window.pI), { name: n, team: null, joinedAt: Date.now() });
+            }
 
             document.getElementById('joinScreen').style.display = 'none';
             document.getElementById('waitingScreen').style.display = 'flex';
@@ -247,7 +257,13 @@
                     return;
                 }
 
-                mT = d.data().team;
+                const pData = d.data();
+                mT = pData.team;
+
+                // Update greeting & session if host renamed the player
+                const currentName = pData.name;
+                document.getElementById('greetingName').innerText = `Välkommen, ${currentName}!`;
+                sessionStorage.setItem('lk_name', currentName);
 
                 const sE = document.getElementById('playerStatus');
                 const tB = document.getElementById('teammatesBox');
