@@ -74,8 +74,10 @@ service cloud.firestore {
       // 3b. PLAYERS (spelare i rummet)
       // ------------------------------------------
       match /players/{playerId} {
-        // Alla inloggade i rummet kan se spelarlistan
-        allow read: if request.auth != null;
+        // GDPR: bara hosten läser alla; en spelare läser bara sitt eget dokument
+        allow read: if request.auth != null
+          && (playerId == request.auth.uid
+              || request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid);
 
         // En spelare kan bara skapa sin EGEN doc (playerId = deras UID)
         allow create: if request.auth != null
