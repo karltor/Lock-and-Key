@@ -12,20 +12,22 @@
       ],
       "bonusClues": [
         "Det är ett av endast två länder i Sydamerika utan kust (det andra är Bolivia).",
-        "Huvudstaden heter Asunción."
+        "Huvudstaden heter Asunción.",
+        "Man skulle kunna tro att landet gränsar mot Uruguay, men det gör det inte."
       ]
     },
     {
       "question": "Vilket land söker vi?",
       "answer": "Kanada",
       "clues": [
-        "Landet ligger geografiskt i Nordamerika.",
+        "Landet ligger i Nordamerika.",
         "Statskicket är en monarki.",
         "Landet har landgräns till exakt ett enda annat land."
       ],
       "bonusClues": [
         "Landet är till ytan världens näst största land.",
-        "Huvudstaden heter Ottawa och flaggan har ett rött lönnlöv."
+        "Flaggan har ett rött lönnlöv.",
+        "Landets största stad heter Toronto men det är inte landets huvudstad."
       ]
     },
     {
@@ -37,8 +39,9 @@
         "Landet har landgräns till exakt ett enda annat land."
       ],
       "bonusClues": [
-        "Landet gränsar endast till Storbritannien (via Nordirland).",
-        "Huvudstaden heter Dublin och landet förknippas ofta med en grön treklöver."
+        "Landets enda landgräns går till en stat som består av fyra riksdelar.",
+        "Landet förknippas ofta med en grön treklöver.",
+        "Huvudstaden heter Dublin."
       ]
     },
     {
@@ -51,7 +54,8 @@
       ],
       "bonusClues": [
         "Landet gränsar även till Atlanten i väster och Algeriet i öster.",
-        "Huvudstaden heter Rabat, men Casablanca är landets största stad."
+        "Huvudstaden heter Rabat, men Casablanca är landets största stad.",
+        "En vanlig turistdestination i landet är Marrakesh, som till viss del delar landets namn."
       ]
     },
     {
@@ -89,7 +93,8 @@
         "Landet delar landgräns med exakt fyra andra länder."
       ],
       "bonusClues": [
-        "Landet är känt för sin choklad, sina våfflor och som EU:s inofficiella huvudstad.",
+        "Landet är känt för sin choklad och för sina våfflor.",
+        "EU:s inofficiella huvudstad ligger i landet.",
         "Huvudstaden heter Bryssel."
       ]
     },
@@ -97,7 +102,7 @@
       "question": "Vilket land söker vi?",
       "answer": "Jordanien",
       "clues": [
-        "Landet ligger geografiskt i Asien.",
+        "Landet ligger i Asien.",
         "Nationen styrs som en monarki.",
         "Landet har landgräns mot exakt fem andra länder/territorier."
       ],
