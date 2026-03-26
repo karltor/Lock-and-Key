@@ -192,6 +192,12 @@
             const s = await getDoc(doc(db, "rooms", r));
             if (!s.exists()) { document.getElementById('loginError').innerText = "Rummet finns inte!"; return; }
 
+            // Förhindra att hosten går med i sitt eget rum (samma anonyma auth-session)
+            if (s.data().hostUid === uid) {
+                document.getElementById('loginError').innerText = "Du är redan värd för detta rum. Öppna play.html i en annan webbläsare eller inkognitofönster för att testa som elev.";
+                return;
+            }
+
             window.cR = r;
 
             // Check if player doc already exists (reconnecting after refresh)
@@ -438,17 +444,27 @@
                 iE.disabled = false;
                 document.getElementById('submitBtn').disabled = false;
                 iE.focus();
-                sT("Kunde inte skicka svar. Försök igen!", "error");
+                console.error("Submission error:", e.code, e.message, e);
+                if (e.code === 'permission-denied') {
+                    sT("Åtkomst nekad. Kontrollera att du inte är värd i samma webbläsare.", "error");
+                } else {
+                    sT("Kunde inte skicka svar. Försök igen!", "error");
+                }
             }
         }
 
         window.sQ = async function() {
             if(!mT || !rD || window.iC) return;
-            await setDoc(doc(db, "rooms", window.cR, "submissions", mT.toString()), {
-                guess: "__SKIP__",
-                timestamp: Date.now()
-            });
-            sT("Begär att få hoppa över...", "info");
+            try {
+                await setDoc(doc(db, "rooms", window.cR, "submissions", mT.toString()), {
+                    guess: "__SKIP__",
+                    timestamp: Date.now()
+                });
+                sT("Begär att få hoppa över...", "info");
+            } catch (e) {
+                console.error("Skip error:", e.code, e.message, e);
+                sT("Kunde inte hoppa över. Försök igen!", "error");
+            }
         }
 
         function sMg() {
