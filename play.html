@@ -193,7 +193,7 @@
             if (!s.exists()) { document.getElementById('loginError').innerText = "Rummet finns inte!"; return; }
 
             // Förhindra att hosten går med i sitt eget rum (samma anonyma auth-session)
-            if (s.data().hostUid === uid) {
+            if (s.data().hostUid === window.pI) {
                 document.getElementById('loginError').innerText = "Du är redan värd för detta rum. Öppna play.html i en annan webbläsare eller inkognitofönster för att testa som elev.";
                 return;
             }
